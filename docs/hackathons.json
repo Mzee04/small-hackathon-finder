@@ -1,0 +1,781 @@
+{
+  "last_updated_utc": "2026-10-25T14:39:51Z",
+  "source": "https://devpost.com/api/hackathons?status[]=open",
+  "ranking": "prize_amount / registrations_count (registrations are not submissions)",
+  "note": "Honest limits: this list only covers hackathons listed on Devpost. Registration counts are not submissions - most registered teams never submit, so real odds are usually better than the numbers suggest, but the ratio is only a heuristic, not a prediction. Prize amounts are self-reported by organisers and are not verified, may be split across many tracks or teams, and currencies are shown as listed without conversion. Always read each hackathon's rules page for eligibility, team-size limits and exact prize conditions before entering.",
+  "stats": {
+    "total_count": 71,
+    "fetched": 71,
+    "pages_fetched": 8,
+    "complete": true
+  },
+  "hackathons": [
+    {
+      "title": "Health Hackathon 3.0",
+      "url": "https://health-hackathon-3-0.devpost.com/",
+      "prize_amount": 200000.0,
+      "prize_currency": "₹",
+      "prize_display": "₹ 200,000",
+      "cash_prizes": 1,
+      "registrations_count": 7,
+      "prize_per_registrant": 28571.43,
+      "time_left_to_submission": "6 days left",
+      "submission_period_dates": "Oct 24 - 31, 2026",
+      "location": "VIT Bhopal University",
+      "is_online": false,
+      "themes": [
+        "Health"
+      ],
+      "organization_name": "VIT Bhopal University"
+    },
+    {
+      "title": "HackWithAditya",
+      "url": "https://hackwithaditya.devpost.com/",
+      "prize_amount": 500000.0,
+      "prize_currency": "₹",
+      "prize_display": "₹ 500,000",
+      "cash_prizes": 1,
+      "registrations_count": 78,
+      "prize_per_registrant": 6410.26,
+      "time_left_to_submission": "about 1 month left",
+      "submission_period_dates": "Oct 16 - Nov 25, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Education",
+        "Health",
+        "Machine Learning/AI"
+      ],
+      "organization_name": "Aditya University"
+    },
+    {
+      "title": "Herhack",
+      "url": "https://herhack.devpost.com/",
+      "prize_amount": 200000.0,
+      "prize_currency": "₹",
+      "prize_display": "₹ 200,000",
+      "cash_prizes": 13,
+      "registrations_count": 65,
+      "prize_per_registrant": 3076.92,
+      "time_left_to_submission": "17 days left",
+      "submission_period_dates": "Oct 17 - Nov 10, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Blockchain",
+        "Open Ended"
+      ],
+      "organization_name": "Echelon institute of technology"
+    },
+    {
+      "title": "Hybrid Micro Mouse Challenge ",
+      "url": "https://hybrid-micro-mouse-challenge.devpost.com/",
+      "prize_amount": 55000.0,
+      "prize_currency": "₹",
+      "prize_display": "₹ 55,000",
+      "cash_prizes": 8,
+      "registrations_count": 19,
+      "prize_per_registrant": 2894.74,
+      "time_left_to_submission": "4 days left",
+      "submission_period_dates": "Oct 22 - 29, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Education",
+        "IoT",
+        "Open Ended"
+      ],
+      "organization_name": "Alliance University"
+    },
+    {
+      "title": "Engage 6.0 – Code with AI Hackathon",
+      "url": "https://engage6.devpost.com/",
+      "prize_amount": 45000.0,
+      "prize_currency": "$",
+      "prize_display": "$45,000",
+      "cash_prizes": 1,
+      "registrations_count": 17,
+      "prize_per_registrant": 2647.06,
+      "time_left_to_submission": "2 days left",
+      "submission_period_dates": "Oct 21 - 27, 2026",
+      "location": "The NorthCap University",
+      "is_online": false,
+      "themes": [
+        "Machine Learning/AI"
+      ],
+      "organization_name": "The Northcap University"
+    },
+    {
+      "title": "Meta VR Start Developer Competition 2026",
+      "url": "https://start-developer-competition-26.devpost.com/",
+      "prize_amount": 1000000.0,
+      "prize_currency": "$",
+      "prize_display": "$1,000,000",
+      "cash_prizes": 19,
+      "registrations_count": 3941,
+      "prize_per_registrant": 253.74,
+      "time_left_to_submission": "24 days left",
+      "submission_period_dates": "Sep 24 - Nov 18, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "AR/VR",
+        "Machine Learning/AI",
+        "Web"
+      ],
+      "organization_name": "Meta"
+    },
+    {
+      "title": "MineArena 1.0",
+      "url": "https://minearena-1-0.devpost.com/",
+      "prize_amount": 75000.0,
+      "prize_currency": "₹",
+      "prize_display": "₹ 75,000",
+      "cash_prizes": 5,
+      "registrations_count": 299,
+      "prize_per_registrant": 250.84,
+      "time_left_to_submission": "6 days left",
+      "submission_period_dates": "Oct 15 - 31, 2026",
+      "location": "SSM cultural centre",
+      "is_online": false,
+      "themes": [
+        "Machine Learning/AI",
+        "Fintech",
+        "Health"
+      ],
+      "organization_name": "Code commit"
+    },
+    {
+      "title": "UGREEN Hackathon 2026 on AI NAS",
+      "url": "https://ugreenhackathon.devpost.com/",
+      "prize_amount": 46000.0,
+      "prize_currency": "$",
+      "prize_display": "$46,000",
+      "cash_prizes": 4,
+      "registrations_count": 344,
+      "prize_per_registrant": 133.72,
+      "time_left_to_submission": "22 days left",
+      "submission_period_dates": "Oct 22 - Nov 16, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Lifehacks",
+        "Machine Learning/AI",
+        "Productivity"
+      ],
+      "organization_name": "UGREEN"
+    },
+    {
+      "title": "CodeFest 2026 by ColorStackBU",
+      "url": "https://codefest-2026-colorstackbu.devpost.com/",
+      "prize_amount": 800.0,
+      "prize_currency": "$",
+      "prize_display": "$800",
+      "cash_prizes": 1,
+      "registrations_count": 8,
+      "prize_per_registrant": 100.0,
+      "time_left_to_submission": "about 7 hours left",
+      "submission_period_dates": "Oct 24 - 25, 2026",
+      "location": "Binghamton University Classroom Wing",
+      "is_online": false,
+      "themes": [
+        "Open Ended",
+        "Social Good",
+        "Beginner Friendly"
+      ],
+      "organization_name": "ColorStackBU"
+    },
+    {
+      "title": "Cal Hacks 13.0",
+      "url": "https://cal-hacks-13-0.devpost.com/",
+      "prize_amount": 159822.0,
+      "prize_currency": "$",
+      "prize_display": "$159,822",
+      "cash_prizes": 22,
+      "registrations_count": 1735,
+      "prize_per_registrant": 92.12,
+      "time_left_to_submission": "about 1 hour left",
+      "submission_period_dates": "Oct 23 - 25, 2026",
+      "location": "Palace of Fine Arts",
+      "is_online": false,
+      "themes": [
+        "Beginner Friendly",
+        "Social Good",
+        "Open Ended"
+      ],
+      "organization_name": "Cal Hacks"
+    },
+    {
+      "title": "CodeSprint by Elite Coders",
+      "url": "https://codesprint-by-elitecoders.devpost.com/",
+      "prize_amount": 30000.0,
+      "prize_currency": "₹",
+      "prize_display": "₹ 30,000",
+      "cash_prizes": 3,
+      "registrations_count": 340,
+      "prize_per_registrant": 88.24,
+      "time_left_to_submission": "5 days left",
+      "submission_period_dates": "Sep 25 - Oct 30, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Open Ended",
+        "Web"
+      ],
+      "organization_name": "elite coders"
+    },
+    {
+      "title": "DuQuantum 2026",
+      "url": "https://duquantum-2026.devpost.com/",
+      "prize_amount": 4700.0,
+      "prize_currency": "$",
+      "prize_display": "$4,700",
+      "cash_prizes": 6,
+      "registrations_count": 59,
+      "prize_per_registrant": 79.66,
+      "time_left_to_submission": "about 1 hour left",
+      "submission_period_dates": "Oct 25, 2026",
+      "location": "Duke University - Wilkinson Building",
+      "is_online": false,
+      "themes": [
+        "Beginner Friendly",
+        "Quantum"
+      ],
+      "organization_name": "HackDuke"
+    },
+    {
+      "title": "Codex x TwitchCon Hackathon",
+      "url": "https://twitchcon-codex.devpost.com/",
+      "prize_amount": 25000.0,
+      "prize_currency": "$",
+      "prize_display": "$25,000",
+      "cash_prizes": 4,
+      "registrations_count": 493,
+      "prize_per_registrant": 50.71,
+      "time_left_to_submission": "8 days left",
+      "submission_period_dates": "Oct 23 - Nov 02, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Communication",
+        "Gaming",
+        "Machine Learning/AI"
+      ],
+      "organization_name": "Twitch"
+    },
+    {
+      "title": "AWS Communication Developer Services (CDS) Agentic AI Partner Hackathon",
+      "url": "https://aws-cds-partner.devpost.com/",
+      "prize_amount": 40000.0,
+      "prize_currency": "$",
+      "prize_display": "$40,000",
+      "cash_prizes": 4,
+      "registrations_count": 1026,
+      "prize_per_registrant": 38.99,
+      "time_left_to_submission": "3 days left",
+      "submission_period_dates": "Sep 14 - Oct 28, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Communication",
+        "Mobile",
+        "Machine Learning/AI"
+      ],
+      "organization_name": "AWS"
+    },
+    {
+      "title": "HarborHack 2026 - Agent In The Loop",
+      "url": "https://harborhack-2026.devpost.com/",
+      "prize_amount": 1500.0,
+      "prize_currency": "$",
+      "prize_display": "$1,500",
+      "cash_prizes": 2,
+      "registrations_count": 55,
+      "prize_per_registrant": 27.27,
+      "time_left_to_submission": "about 6 hours left",
+      "submission_period_dates": "Oct 23 - 25, 2026",
+      "location": "College of Charleston, Harbor Walk",
+      "is_online": false,
+      "themes": [
+        "Machine Learning/AI",
+        "Open Ended",
+        "Beginner Friendly"
+      ],
+      "organization_name": "Charlestonhacks"
+    },
+    {
+      "title": "RenderJuice Blender Animation & Programmatic Rendering Contest",
+      "url": "https://programmatic-rendering-contest.devpost.com/",
+      "prize_amount": 1500.0,
+      "prize_currency": "$",
+      "prize_display": "$1,500",
+      "cash_prizes": 9,
+      "registrations_count": 57,
+      "prize_per_registrant": 26.32,
+      "time_left_to_submission": "6 days left",
+      "submission_period_dates": "Oct 14 - 31, 2026",
+      "location": "New York, NY",
+      "is_online": false,
+      "themes": [
+        "Design",
+        "Music/Art",
+        "Open Ended"
+      ],
+      "organization_name": "RenderJuice"
+    },
+    {
+      "title": "DS+X Hackathon 2026",
+      "url": "https://ds-x-hackathon-2026.devpost.com/",
+      "prize_amount": 5750.0,
+      "prize_currency": "$",
+      "prize_display": "$5,750",
+      "cash_prizes": 11,
+      "registrations_count": 222,
+      "prize_per_registrant": 25.9,
+      "time_left_to_submission": "20 minutes left",
+      "submission_period_dates": "Oct 24 - 25, 2026",
+      "location": "Boston University- CDS",
+      "is_online": false,
+      "themes": [
+        "Databases",
+        "Health",
+        "Machine Learning/AI"
+      ],
+      "organization_name": "Boston University Spark!"
+    },
+    {
+      "title": "Gator Hack V - AI Days 2026",
+      "url": "https://gatorhack2026.devpost.com/",
+      "prize_amount": 6000.0,
+      "prize_currency": "$",
+      "prize_display": "$6,000",
+      "cash_prizes": 4,
+      "registrations_count": 284,
+      "prize_per_registrant": 21.13,
+      "time_left_to_submission": "about 6 hours left",
+      "submission_period_dates": "Oct 23 - 25, 2026",
+      "location": "Newell Hall, University of Florida",
+      "is_online": false,
+      "themes": [
+        "Education"
+      ],
+      "organization_name": "University of Florida"
+    },
+    {
+      "title": "Arbiter Hacks V1",
+      "url": "https://arbiter-hacks-v1.devpost.com/",
+      "prize_amount": 7800.0,
+      "prize_currency": "$",
+      "prize_display": "$7,800",
+      "cash_prizes": 5,
+      "registrations_count": 532,
+      "prize_per_registrant": 14.66,
+      "time_left_to_submission": "about 2 months left",
+      "submission_period_dates": "Oct 20 - Dec 21, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Machine Learning/AI",
+        "Open Ended"
+      ],
+      "organization_name": "Arbiter "
+    },
+    {
+      "title": "Life After Code",
+      "url": "https://gitlab-transcend.devpost.com/",
+      "prize_amount": 45000.0,
+      "prize_currency": "$",
+      "prize_display": "$45,000",
+      "cash_prizes": 1,
+      "registrations_count": 3135,
+      "prize_per_registrant": 14.35,
+      "time_left_to_submission": "2 days left",
+      "submission_period_dates": "Oct 05 - 27, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "DevOps",
+        "Machine Learning/AI",
+        "Productivity"
+      ],
+      "organization_name": "GitLab"
+    },
+    {
+      "title": "FUSE Society Blueprint 2026",
+      "url": "https://fuse-society-blueprint-2026.devpost.com/",
+      "prize_amount": 250.0,
+      "prize_currency": "$",
+      "prize_display": "$250",
+      "cash_prizes": 1,
+      "registrations_count": 18,
+      "prize_per_registrant": 13.89,
+      "time_left_to_submission": "6 days left",
+      "submission_period_dates": "Oct 24 - 31, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly"
+      ],
+      "organization_name": "Fuse Society"
+    },
+    {
+      "title": "HackFW: MADE Challenge",
+      "url": "https://hackfw.devpost.com/",
+      "prize_amount": 1900.0,
+      "prize_currency": "$",
+      "prize_display": "$1,900",
+      "cash_prizes": 3,
+      "registrations_count": 162,
+      "prize_per_registrant": 11.73,
+      "time_left_to_submission": "5 days left",
+      "submission_period_dates": "Oct 01 - 30, 2026",
+      "location": "Fort Worth",
+      "is_online": false,
+      "themes": [
+        "IoT",
+        "Machine Learning/AI",
+        "Robotic Process Automation"
+      ],
+      "organization_name": "Fort Worth DAO"
+    },
+    {
+      "title": "Qloo Agentic Hackathon",
+      "url": "https://qloo.devpost.com/",
+      "prize_amount": 25000.0,
+      "prize_currency": "$",
+      "prize_display": "$25,000",
+      "cash_prizes": 1,
+      "registrations_count": 2382,
+      "prize_per_registrant": 10.5,
+      "time_left_to_submission": "6 days left",
+      "submission_period_dates": "Sep 30 - Oct 30, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Machine Learning/AI"
+      ],
+      "organization_name": "Qloo"
+    },
+    {
+      "title": "YouCam API Skin AI & eCommerce VTO Hackathon",
+      "url": "https://youcam-api-skin-ai-ecommerce.devpost.com/",
+      "prize_amount": 6000.0,
+      "prize_currency": "$",
+      "prize_display": "$6,000",
+      "cash_prizes": 5,
+      "registrations_count": 1250,
+      "prize_per_registrant": 4.8,
+      "time_left_to_submission": "8 days left",
+      "submission_period_dates": "Sep 29 - Nov 02, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "AR/VR",
+        "E-commerce/Retail",
+        "Machine Learning/AI"
+      ],
+      "organization_name": "Perfect Corp"
+    },
+    {
+      "title": "Learn AR with SPECS",
+      "url": "https://learn-specs.devpost.com/",
+      "prize_amount": 2500.0,
+      "prize_currency": "$",
+      "prize_display": "$2,500",
+      "cash_prizes": 3,
+      "registrations_count": 690,
+      "prize_per_registrant": 3.62,
+      "time_left_to_submission": "15 days left",
+      "submission_period_dates": "Oct 15 - Nov 09, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "AR/VR",
+        "Machine Learning/AI",
+        "Design"
+      ],
+      "organization_name": "Devpost"
+    },
+    {
+      "title": "AccessED Hacks",
+      "url": "https://accessed-hacks.devpost.com/",
+      "prize_amount": 225.0,
+      "prize_currency": "$",
+      "prize_display": "$225",
+      "cash_prizes": 1,
+      "registrations_count": 67,
+      "prize_per_registrant": 3.36,
+      "time_left_to_submission": "26 days left",
+      "submission_period_dates": "Oct 17 - Nov 20, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Education",
+        "Social Good"
+      ],
+      "organization_name": "AccessEDnpo"
+    },
+    {
+      "title": "OpenCV AI Competition 2026, powered by AWS",
+      "url": "https://opencv26.devpost.com/",
+      "prize_amount": 20250.0,
+      "prize_currency": "$",
+      "prize_display": "$20,250",
+      "cash_prizes": 6,
+      "registrations_count": 6065,
+      "prize_per_registrant": 3.34,
+      "time_left_to_submission": "1 day left",
+      "submission_period_dates": "Aug 26 - Oct 27, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "IoT",
+        "Machine Learning/AI",
+        "Serverless"
+      ],
+      "organization_name": "OpenCV"
+    },
+    {
+      "title": "PayPal AI Hackathon",
+      "url": "https://paypalaihackathon.devpost.com/",
+      "prize_amount": 67500.0,
+      "prize_currency": "$",
+      "prize_display": "$67,500",
+      "cash_prizes": 1,
+      "registrations_count": 21004,
+      "prize_per_registrant": 3.21,
+      "time_left_to_submission": "18 days left",
+      "submission_period_dates": "Oct 01 - Nov 12, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Low/No Code",
+        "Machine Learning/AI",
+        "Web"
+      ],
+      "organization_name": "PayPal"
+    },
+    {
+      "title": "IEEE ClimateChain Global Hackathon",
+      "url": "https://ieee-climatechain-hack.devpost.com/",
+      "prize_amount": 3000.0,
+      "prize_currency": "$",
+      "prize_display": "$3,000",
+      "cash_prizes": 1,
+      "registrations_count": 1198,
+      "prize_per_registrant": 2.5,
+      "time_left_to_submission": "about 6 hours left",
+      "submission_period_dates": "Oct 05 - 25, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Blockchain",
+        "Machine Learning/AI",
+        "Social Good"
+      ],
+      "organization_name": "IEEE Turkey"
+    },
+    {
+      "title": "SafeSpace Hacks",
+      "url": "https://safespace-hacks.devpost.com/",
+      "prize_amount": 280.0,
+      "prize_currency": "$",
+      "prize_display": "$280",
+      "cash_prizes": 1,
+      "registrations_count": 136,
+      "prize_per_registrant": 2.06,
+      "time_left_to_submission": "28 days left",
+      "submission_period_dates": "Oct 17 - Nov 22, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Cybersecurity",
+        "Social Good"
+      ],
+      "organization_name": "SafeSpace"
+    },
+    {
+      "title": "Green Shift Hacks",
+      "url": "https://green-shift-hacks.devpost.com/",
+      "prize_amount": 125.0,
+      "prize_currency": "$",
+      "prize_display": "$125",
+      "cash_prizes": 1,
+      "registrations_count": 63,
+      "prize_per_registrant": 1.98,
+      "time_left_to_submission": "23 days left",
+      "submission_period_dates": "Oct 18 - Nov 17, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Social Good"
+      ],
+      "organization_name": "HackathonForEveryone"
+    },
+    {
+      "title": "LaunchPad Hacks",
+      "url": "https://launchpad-hacks.devpost.com/",
+      "prize_amount": 300.0,
+      "prize_currency": "$",
+      "prize_display": "$300",
+      "cash_prizes": 1,
+      "registrations_count": 161,
+      "prize_per_registrant": 1.86,
+      "time_left_to_submission": "26 days left",
+      "submission_period_dates": "Oct 16 - Nov 20, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Open Ended"
+      ],
+      "organization_name": "Hack4TodayOrg"
+    },
+    {
+      "title": "Nebius x NVIDIA Global AI Hackathon",
+      "url": "https://nebiusglobalaihackathon.devpost.com/",
+      "prize_amount": 50000.0,
+      "prize_currency": "$",
+      "prize_display": "$50,000",
+      "cash_prizes": 1,
+      "registrations_count": 27202,
+      "prize_per_registrant": 1.84,
+      "time_left_to_submission": "5 days left",
+      "submission_period_dates": "Aug 26 - Oct 30, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Machine Learning/AI",
+        "Beginner Friendly",
+        "Robotic Process Automation"
+      ],
+      "organization_name": "nebius"
+    },
+    {
+      "title": "Girls Who Code HHS Hackathon 2026",
+      "url": "https://gwchhs-hackathon-2026.devpost.com/",
+      "prize_amount": 50.0,
+      "prize_currency": "$",
+      "prize_display": "$50",
+      "cash_prizes": 1,
+      "registrations_count": 44,
+      "prize_per_registrant": 1.14,
+      "time_left_to_submission": "4 days left",
+      "submission_period_dates": "Oct 15 - 29, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Gaming",
+        "Social Good"
+      ],
+      "organization_name": "Girls Who Code HHS"
+    },
+    {
+      "title": "AQX Sports Analytics Data Bowl 4.0",
+      "url": "https://aqxanalyticsfour.devpost.com/",
+      "prize_amount": 50.0,
+      "prize_currency": "$",
+      "prize_display": "$50",
+      "cash_prizes": 1,
+      "registrations_count": 96,
+      "prize_per_registrant": 0.52,
+      "time_left_to_submission": "7 days left",
+      "submission_period_dates": "Oct 18 - Nov 01, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Databases",
+        "Gaming"
+      ],
+      "organization_name": "Devpost"
+    },
+    {
+      "title": "Build With AI: Basics",
+      "url": "https://learn-ai-basics.devpost.com/",
+      "prize_amount": 2500.0,
+      "prize_currency": "$",
+      "prize_display": "$2,500",
+      "cash_prizes": 1,
+      "registrations_count": 4896,
+      "prize_per_registrant": 0.51,
+      "time_left_to_submission": "1 day left",
+      "submission_period_dates": "Sep 22 - Oct 26, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Machine Learning/AI",
+        "Beginner Friendly",
+        "Education"
+      ],
+      "organization_name": "Devpost"
+    },
+    {
+      "title": "NextSpark Hacks",
+      "url": "https://nextspark-hacks.devpost.com/",
+      "prize_amount": 100.0,
+      "prize_currency": "$",
+      "prize_display": "$100",
+      "cash_prizes": 1,
+      "registrations_count": 196,
+      "prize_per_registrant": 0.51,
+      "time_left_to_submission": "1 day left",
+      "submission_period_dates": "Oct 21 - 26, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Machine Learning/AI",
+        "Open Ended"
+      ],
+      "organization_name": "Independent Student Organizer"
+    },
+    {
+      "title": "Next Byte Hacks V5",
+      "url": "https://next-byte-hacks-v5.devpost.com/",
+      "prize_amount": 100.0,
+      "prize_currency": "$",
+      "prize_display": "$100",
+      "cash_prizes": 3,
+      "registrations_count": 382,
+      "prize_per_registrant": 0.26,
+      "time_left_to_submission": "6 days left",
+      "submission_period_dates": "Oct 06 - 31, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly",
+        "Low/No Code",
+        "Open Ended"
+      ],
+      "organization_name": "Next Byte Hacks"
+    },
+    {
+      "title": "Pumpkin Playground",
+      "url": "https://pumpkin-playground.devpost.com/",
+      "prize_amount": 30.0,
+      "prize_currency": "$",
+      "prize_display": "$30",
+      "cash_prizes": 2,
+      "registrations_count": 140,
+      "prize_per_registrant": 0.21,
+      "time_left_to_submission": "5 days left",
+      "submission_period_dates": "Oct 12 - 30, 2026",
+      "location": "Online",
+      "is_online": true,
+      "themes": [
+        "Design",
+        "Gaming",
+        "Web"
+      ],
+      "organization_name": "ACM Long Beach"
+    }
+  ]
+}
