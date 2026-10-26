@@ -43,6 +43,7 @@ MAX_RETRIES = 3               # attempts per page
 RETRY_BACKOFF = 2.0           # seconds, doubled after each failed attempt
 PER_PAGE = 9                  # Devpost page size, used only as a sanity limit
 MAX_PAGES = 500               # hard safety stop for the pagination loop
+FX_RATES_DATE = "2026-10-26"  # when the approximate exchange rates below were taken
 
 LIMITS_NOTE = (
     "Honest limits: this list only covers hackathons listed on Devpost. "
@@ -51,9 +52,95 @@ LIMITS_NOTE = (
     "the ratio is only a heuristic, not a prediction. Prize amounts are "
     "self-reported by organisers and are not verified, may be split across "
     "many tracks or teams, and currencies are shown as listed without "
-    "conversion. Always read each hackathon's rules page for eligibility, "
+    "conversion, with a rough US-dollar value next to non-dollar prizes. "
+    "For ranking, prizes are converted to US dollars using approximate, "
+    "hard-coded exchange rates (taken " + FX_RATES_DATE + ", not live), and "
+    "prizes in a currency without a known rate are listed after all the "
+    "others. Always read each hackathon's rules page for eligibility, "
     "team-size limits and exact prize conditions before entering."
 )
+
+# ---------------------------------------------------------------------------
+# Approximate exchange rates (offline, hard-coded)
+# ---------------------------------------------------------------------------
+# Prizes are listed in many currencies, so they are converted to US dollars
+# before ranking. These rates are APPROXIMATE and DATED: units of each
+# currency per 1 USD, rounded, taken from open.er-api.com on FX_RATES_DATE.
+# They are only good enough to put hackathons in a sensible order; never use
+# them for real money decisions. Update the table (and the date) now and then.
+UNITS_PER_USD: Dict[str, float] = {
+    "USD": 1.0,
+    "INR": 95.2,
+    "EUR": 0.892,
+    "GBP": 0.748,
+    "CAD": 1.40,
+    "AUD": 1.42,
+    "NZD": 1.75,
+    "SGD": 1.28,
+    "HKD": 7.84,
+    "JPY": 157.0,
+    "CNY": 6.68,
+    "KRW": 1324.0,
+    "BRL": 5.00,
+    "MXN": 18.7,
+    "PHP": 63.7,
+    "IDR": 18090.0,
+    "MYR": 4.09,
+    "CHF": 0.825,
+    "ZAR": 16.6,
+    "TRY": 49.8,
+    "AED": 3.67,
+    "PKR": 277.0,
+    "BDT": 123.5,
+    "KES": 130.0,
+}
+
+# How Devpost (and organisers) write each currency -> ISO code. Matching is
+# case-insensitive and ignores spaces. A plain "$" is US dollars on Devpost
+# (other dollars are written like "$CAD"). Ambiguous symbols such as "¥"
+# (yen or yuan) and a missing symbol are deliberately left out: those prizes
+# are treated as an unknown currency.
+CURRENCY_ALIASES: Dict[str, str] = {
+    "$": "USD", "US$": "USD", "USD": "USD", "$USD": "USD", "USD$": "USD",
+    "\u20b9": "INR", "INR": "INR", "RS": "INR", "RS.": "INR", "\u20b9INR": "INR",
+    "\u20ac": "EUR", "EUR": "EUR",
+    "\u00a3": "GBP", "GBP": "GBP",
+    "$CAD": "CAD", "CAD": "CAD", "CA$": "CAD", "C$": "CAD", "CAD$": "CAD",
+    "$AUD": "AUD", "AUD": "AUD", "AU$": "AUD", "A$": "AUD", "AUD$": "AUD",
+    "$NZD": "NZD", "NZD": "NZD", "NZ$": "NZD",
+    "$SGD": "SGD", "SGD": "SGD", "S$": "SGD",
+    "$HKD": "HKD", "HKD": "HKD", "HK$": "HKD",
+    "JPY": "JPY", "CNY": "CNY", "RMB": "CNY",
+    "\u20a9": "KRW", "KRW": "KRW",
+    "R$": "BRL", "BRL": "BRL",
+    "MXN": "MXN", "$MXN": "MXN", "MX$": "MXN",
+    "\u20b1": "PHP", "PHP": "PHP",
+    "RP": "IDR", "IDR": "IDR",
+    "RM": "MYR", "MYR": "MYR",
+    "CHF": "CHF",
+    "ZAR": "ZAR",
+    "\u20ba": "TRY", "TRY": "TRY",
+    "AED": "AED",
+    "PKR": "PKR",
+    "\u09f3": "BDT", "BDT": "BDT",
+    "KES": "KES", "KSH": "KES",
+}
+
+
+def currency_code(symbol: str) -> Optional[str]:
+    """Map a prize currency symbol to an ISO code we have a rate for, or None."""
+    key = re.sub(r"\s+", "", symbol or "").upper()
+    code = CURRENCY_ALIASES.get(key)
+    return code if code in UNITS_PER_USD else None
+
+
+def to_usd(amount: float, symbol: str) -> Optional[float]:
+    """Approximate USD value of an amount, or None for an unknown currency."""
+    code = currency_code(symbol)
+    if code is None:
+        return None
+    return amount / UNITS_PER_USD[code]
+
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _PRIZE_RE = re.compile(r"^\s*([^\d]*?)\s*([\d][\d,]*(?:\.\d+)?)\s*$")
@@ -144,7 +231,8 @@ def parse_prize(raw: Optional[str]) -> Optional[Tuple[str, float]]:
     """Parse Devpost's prize_amount HTML into (currency_symbol, amount).
 
     Example: '$<span data-currency-value>1,500</span>' -> ('$', 1500.0)
-    Currency symbols are kept as-is; nothing is converted between currencies.
+    Currency symbols are kept as-is here; see to_usd() for the approximate
+    conversion used only for ranking.
     Returns None when the value is missing or cannot be parsed.
     """
     if not raw:
@@ -184,6 +272,7 @@ def build_entry(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if amount <= 0:
         return None
 
+    prize_usd = to_usd(amount, symbol)
     registrants = item.get("registrations_count")
     registrants = registrants if isinstance(registrants, int) and registrants >= 0 else 0
     location = (item.get("displayed_location") or {}).get("location") or ""
@@ -199,6 +288,14 @@ def build_entry(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         # A hackathon with zero registrants so far still counts as low
         # competition, so it is ranked as if exactly one person registered.
         "prize_per_registrant": round(amount / max(registrants, 1), 2),
+        # Approximate US-dollar values used for ranking (None when the
+        # currency has no known rate; see UNITS_PER_USD).
+        "prize_currency_code": currency_code(symbol),
+        "currency_known": prize_usd is not None,
+        "prize_usd_approx": round(prize_usd, 2) if prize_usd is not None else None,
+        "usd_per_registrant_approx": (
+            round(prize_usd / max(registrants, 1), 2) if prize_usd is not None else None
+        ),
         "time_left_to_submission": item.get("time_left_to_submission") or "",
         "submission_period_dates": item.get("submission_period_dates") or "",
         "location": location,
@@ -209,10 +306,21 @@ def build_entry(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 
 def build_entries(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Filter and rank a list of raw Devpost items by prize per registrant."""
+    """Filter and rank raw Devpost items by approximate USD prize per registrant.
+
+    Prizes in a known currency are ranked first, by USD per registrant.
+    Prizes in an unknown currency cannot be compared, so they always come
+    after every known one, ordered among themselves by their raw numbers.
+    """
     entries = [entry for item in items if (entry := build_entry(item)) is not None]
-    entries.sort(key=lambda e: (-e["prize_per_registrant"], -e["prize_amount"], e["title"]))
+    entries.sort(key=_rank_key)
     return entries
+
+
+def _rank_key(e: Dict[str, Any]) -> Tuple[int, float, float, str]:
+    if e["currency_known"]:
+        return (0, -e["usd_per_registrant_approx"], -e["prize_usd_approx"], e["title"])
+    return (1, -e["prize_per_registrant"], -e["prize_amount"], e["title"])
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +335,15 @@ def write_json_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
     doc = {
         "last_updated_utc": utc_now_iso(),
         "source": "https://devpost.com/api/hackathons?status[]=open",
-        "ranking": "prize_amount / registrations_count (registrations are not submissions)",
+        "ranking": (
+            "approximate USD prize / registrations_count (registrations are not "
+            "submissions); unknown currencies listed last"
+        ),
+        "fx_rates": {
+            "as_of": FX_RATES_DATE,
+            "note": "approximate, hard-coded units per 1 USD; for ranking only",
+            "units_per_usd": UNITS_PER_USD,
+        },
         "note": LIMITS_NOTE,
         "stats": stats,
         "hackathons": entries,
@@ -240,19 +356,33 @@ def _esc(value: Any) -> str:
     return html_module.escape(str(value), quote=True)
 
 
+def format_per_registrant(e: Dict[str, Any]) -> str:
+    """'$210' for known currencies (approx. USD), raw symbol + '?' otherwise."""
+    if e["currency_known"]:
+        prefix = "" if e["prize_currency_code"] == "USD" else "~"
+        return f"{prefix}${e['usd_per_registrant_approx']:,.0f}"
+    return f"{e['prize_currency']}{e['prize_per_registrant']:,.0f}?"
+
+
 def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: Path) -> None:
     updated = utc_now_iso()
     rows = []
     for i, e in enumerate(entries, start=1):
         where = "Online" if e["is_online"] else _esc(e["location"] or "See site")
         themes = ", ".join(e["themes"][:3]) + ("..." if len(e["themes"]) > 3 else "")
+        per_reg = format_per_registrant(e)
+        usd_note = ""
+        if e["prize_currency_code"] not in (None, "USD"):
+            usd_note = f"<div class='sub'>&asymp; ${e['prize_usd_approx']:,.0f}</div>"
+        elif not e["currency_known"]:
+            usd_note = "<div class='sub'>currency not converted</div>"
         rows.append(
             "<tr>"
             f"<td class='rank'>{i}</td>"
             f"<td class='title'><a href='{_esc(e['url'])}' target='_blank' rel='noopener noreferrer'>{_esc(e['title'])}</a>"
             f"<div class='sub'>{_esc(themes)}</div></td>"
-            f"<td class='num'>{_esc(e['prize_display'])}<div class='sub'>{e['cash_prizes']} cash prize{'s' if e['cash_prizes'] != 1 else ''}</div></td>"
-            f"<td class='num'>{e['registrations_count']:,}<div class='sub'>{_esc(e['prize_currency'])}{e['prize_per_registrant']:,.0f} / registrant</div></td>"
+            f"<td class='num'>{_esc(e['prize_display'])}{usd_note}<div class='sub'>{e['cash_prizes']} cash prize{'s' if e['cash_prizes'] != 1 else ''}</div></td>"
+            f"<td class='num'>{e['registrations_count']:,}<div class='sub'>{_esc(per_reg)} / registrant</div></td>"
             f"<td>{_esc(e['time_left_to_submission'] or '-')}</td>"
             f"<td class='where'>{'🌐' if e['is_online'] else '📍'} {where}</td>"
             "</tr>"
@@ -294,7 +424,8 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
 <body>
 <h1>🏆 Small Hackathon Finder</h1>
 <p class="updated">Open hackathons with cash prizes, ranked by prize money per registered participant
-(fewer registrants &rarr; higher on the list). Updated daily around 06:00 UTC.</p>
+(fewer registrants &rarr; higher on the list). Non-dollar prizes are converted to
+approximate US dollars for ranking (rough rates from {_esc(FX_RATES_DATE)}). Updated daily around 06:00 UTC.</p>
 <p class="updated">Last updated: <time>{_esc(updated)}</time> &middot; {_esc(coverage)}</p>
 
 <div class="note">
@@ -340,13 +471,15 @@ def print_report(entries: List[Dict[str, Any]], stats: Dict[str, Any], top: int)
         print(f"  fetch error: {stats['error']}")
     print(
         f"Kept {len(entries)} hackathons (open, not invite-only, at least 1 cash "
-        f"prize, prize amount above 0), ranked by prize per registrant."
+        f"prize, prize amount above 0), ranked by approx. USD prize per registrant."
     )
     if not entries:
         print("Nothing matched the filters.")
         return
-    print(f"\nTop {min(top, len(entries))} by prize per registrant:\n")
-    header = f"{'#':>3}  {'Prize':>12}  {'Reg':>6}  {'Per reg':>9}  {'Left':<14}  {'Online':<6}  Title"
+    print(f"\nTop {min(top, len(entries))} by approx. USD prize per registrant "
+          f"(rough rates from {FX_RATES_DATE}; ~ = converted, ? = unknown currency):\n")
+    header = (f"{'#':>3}  {'Prize':>12}  {'~USD':>10}  {'Reg':>6}  {'Per reg':>9}  "
+              f"{'Left':<14}  {'Online':<6}  Title")
     print(header)
     print("-" * len(header))
     for i, e in enumerate(entries[:top], start=1):
@@ -355,9 +488,10 @@ def print_report(entries: List[Dict[str, Any]], stats: Dict[str, Any], top: int)
         title = e["title"]
         if len(title) > 48:
             title = title[:45] + "..."
+        usd = f"${e['prize_usd_approx']:,.0f}" if e["currency_known"] else "?"
         print(
-            f"{i:>3}  {e['prize_display']:>12}  {e['registrations_count']:>6}  "
-            f"{e['prize_currency']}{e['prize_per_registrant']:>8,.0f}  {left:<14.14}  {online:<6}  {title}"
+            f"{i:>3}  {e['prize_display']:>12}  {usd:>10}  {e['registrations_count']:>6}  "
+            f"{format_per_registrant(e):>9}  {left:<14.14}  {online:<6}  {title}"
         )
 
 

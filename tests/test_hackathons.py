@@ -329,3 +329,134 @@ class TestPoliteness:
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__]))
+
+
+# ---------------------------------------------------------------------------
+# Currency conversion (approximate, offline)
+# ---------------------------------------------------------------------------
+
+INR = "\u20b9<span data-currency-value>{}</span>"
+USD = "$<span data-currency-value>{}</span>"
+
+
+class TestCurrencyConversion:
+    def test_known_symbols_map_to_codes(self):
+        assert hackathons.currency_code("$") == "USD"
+        assert hackathons.currency_code("\u20b9") == "INR"
+        assert hackathons.currency_code("\u00a3") == "GBP"
+        assert hackathons.currency_code("\u20ac") == "EUR"
+        assert hackathons.currency_code("$CAD") == "CAD"
+        assert hackathons.currency_code("usd") == "USD"      # case-insensitive
+        assert hackathons.currency_code(" Rs. ") == "INR"    # spaces ignored
+
+    def test_unknown_or_ambiguous_symbols(self):
+        assert hackathons.currency_code("") is None
+        assert hackathons.currency_code("\u00a5") is None    # yen or yuan: ambiguous
+        assert hackathons.currency_code("XYZ") is None
+        assert hackathons.to_usd(1000, "XYZ") is None
+
+    def test_every_alias_has_a_rate(self):
+        for code in hackathons.CURRENCY_ALIASES.values():
+            assert code in hackathons.UNITS_PER_USD
+        assert hackathons.UNITS_PER_USD["USD"] == 1.0
+        assert all(rate > 0 for rate in hackathons.UNITS_PER_USD.values())
+
+    def test_usd_is_unchanged(self):
+        assert hackathons.to_usd(45000, "$") == 45000
+
+    def test_inr_converts_to_roughly_two_thousand_dollars(self):
+        usd = hackathons.to_usd(200000, "\u20b9")
+        assert 1500 < usd < 3000
+        assert usd == pytest.approx(200000 / hackathons.UNITS_PER_USD["INR"])
+
+    def test_entry_carries_original_and_usd_values(self):
+        entry = hackathons.build_entry(make_item(prize_amount=INR.format("2,00,000"), registrations_count=10))
+        assert entry["prize_currency"] == "\u20b9"
+        assert entry["prize_amount"] == 200000.0
+        assert entry["prize_per_registrant"] == 20000.0       # raw, original currency
+        assert entry["prize_currency_code"] == "INR"
+        assert entry["currency_known"] is True
+        assert entry["prize_usd_approx"] == pytest.approx(200000 / hackathons.UNITS_PER_USD["INR"], abs=0.01)
+        assert entry["usd_per_registrant_approx"] == pytest.approx(entry["prize_usd_approx"] / 10, abs=0.01)
+
+    def test_unknown_currency_entry_is_flagged(self):
+        entry = hackathons.build_entry(make_item(prize_amount="XYZ <span data-currency-value>5,000</span>"))
+        assert entry is not None
+        assert entry["currency_known"] is False
+        assert entry["prize_currency_code"] is None
+        assert entry["prize_usd_approx"] is None
+        assert entry["usd_per_registrant_approx"] is None
+
+
+class TestCurrencyRanking:
+    def test_inr_200k_ranks_below_usd_45k_with_same_registrants(self):
+        rupees = make_item(title="Rupees", prize_amount=INR.format("200,000"), registrations_count=19)
+        dollars = make_item(title="Dollars", prize_amount=USD.format("45,000"), registrations_count=19)
+        ranked = hackathons.build_entries([rupees, dollars])
+        assert [e["title"] for e in ranked] == ["Dollars", "Rupees"]
+
+    def test_real_world_case_from_live_data(self):
+        # Seen on Devpost on 2026-10-26: a big raw rupee number with few
+        # registrants used to beat a large dollar prize. In USD it should not.
+        rupees = make_item(title="Rupees", prize_amount=INR.format("200,000"), registrations_count=10)
+        dollars = make_item(title="Dollars", prize_amount=USD.format("45,000"), registrations_count=19)
+        ranked = hackathons.build_entries([rupees, dollars])
+        assert [e["title"] for e in ranked] == ["Dollars", "Rupees"]
+
+    def test_inr_can_still_win_on_usd_per_registrant(self):
+        rupees = make_item(title="Rupees", prize_amount=INR.format("500,000"), registrations_count=5)   # ~$1,050/reg
+        dollars = make_item(title="Dollars", prize_amount=USD.format("10,000"), registrations_count=100)  # $100/reg
+        ranked = hackathons.build_entries([dollars, rupees])
+        assert [e["title"] for e in ranked] == ["Rupees", "Dollars"]
+
+    def test_unknown_currency_never_ranks_above_known(self):
+        unknown = make_item(title="Unknown", prize_amount="XYZ <span data-currency-value>9,000,000</span>",
+                            registrations_count=1)
+        tiny_usd = make_item(title="Tiny USD", prize_amount=USD.format("10"), registrations_count=5000)
+        rupees = make_item(title="Rupees", prize_amount=INR.format("1,000"), registrations_count=1000)
+        ranked = hackathons.build_entries([unknown, tiny_usd, rupees])
+        assert ranked[-1]["title"] == "Unknown"
+        assert {e["title"] for e in ranked[:2]} == {"Tiny USD", "Rupees"}
+
+    def test_ranking_is_by_usd_per_registrant(self):
+        items = [
+            make_item(title="A", prize_amount=INR.format("200,000"), registrations_count=10),
+            make_item(title="B", prize_amount=USD.format("45,000"), registrations_count=19),
+            make_item(title="C", prize_amount="\u00a3<span data-currency-value>1,000</span>", registrations_count=2),
+            make_item(title="D", prize_amount=USD.format("900"), registrations_count=19),
+        ]
+        ranked = hackathons.build_entries(items)
+        ratios = [e["usd_per_registrant_approx"] for e in ranked]
+        assert ratios == sorted(ratios, reverse=True)
+
+
+class TestCurrencyOutput:
+    def test_html_shows_original_and_approx_usd(self, tmp_path):
+        entries = hackathons.build_entries([
+            make_item(title="Rupees", prize_amount=INR.format("200,000"), registrations_count=10),
+            make_item(title="Unknown", prize_amount="XYZ <span data-currency-value>5,000</span>"),
+        ])
+        out = tmp_path / "index.html"
+        hackathons.write_html_doc(entries, {"total_count": 2, "fetched": 2, "complete": True}, out)
+        html = out.read_text(encoding="utf-8")
+        usd = round(200000 / hackathons.UNITS_PER_USD["INR"])
+        assert "\u20b9 200,000" in html or "\u20b9200,000" in html
+        assert f"&asymp; ${usd:,}" in html
+        assert "currency not converted" in html
+        assert hackathons.FX_RATES_DATE in html
+
+    def test_json_doc_records_rates_and_date(self, tmp_path):
+        out = tmp_path / "hackathons.json"
+        hackathons.write_json_doc([], {"total_count": 0, "fetched": 0, "complete": True}, out)
+        doc = json.loads(out.read_text(encoding="utf-8"))
+        assert doc["fx_rates"]["as_of"] == hackathons.FX_RATES_DATE
+        assert doc["fx_rates"]["units_per_usd"]["INR"] == hackathons.UNITS_PER_USD["INR"]
+
+    def test_console_report_shows_usd_column(self, capsys):
+        entries = hackathons.build_entries([
+            make_item(title="Rupees", prize_amount=INR.format("200,000"), registrations_count=10),
+        ])
+        hackathons.print_report(entries, {"total_count": 1, "fetched": 1, "pages_fetched": 1, "complete": True}, 5)
+        out = capsys.readouterr().out
+        assert "~USD" in out
+        assert "~$210" in out
