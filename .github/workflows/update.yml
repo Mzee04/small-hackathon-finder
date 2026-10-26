@@ -22,7 +22,7 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pip install --quiet pytest
+          python -m pip install --quiet -r requirements-dev.txt
           python -m pytest tests/ -q
 
       - name: Fetch and rank hackathons
