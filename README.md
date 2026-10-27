@@ -1,12 +1,14 @@
 # Small Hackathon Finder
 
-A free daily list of small, low-competition, cash-prize hackathons that are
+A free list of small, low-competition, cash-prize hackathons that are
 still open — for developers who want a realistic chance of winning.
+Refreshed twice a day (GitHub may run it a few hours late).
 
-Every day a GitHub Actions workflow pulls the public listing of open
+Twice a day a GitHub Actions workflow pulls the public listing of open
 hackathons from [Devpost](https://devpost.com/hackathons), keeps the ones
-that are open to everyone and offer at least one cash prize, and ranks them
-by **prize money per registered participant** (in approximate US dollars) — a rough "less competition"
+that are open to everyone, still before their submission end date, and offer
+at least one cash prize, and ranks them by **prize money per registered
+participant** (in approximate US dollars) — a rough "less competition"
 signal. A hackathon with a decent prize and only a few dozen registrants
 sits at the top; a $100k prize with 30,000 registrants sinks to the bottom.
 
@@ -20,6 +22,8 @@ sits at the top; a $100k prize with 30,000 registrants sinks to the bottom.
    and reports how many hackathons it got versus `meta.total_count`.
 2. Keeps only hackathons that are:
    - open (`open_state` is `open`),
+   - still before the submission end date (Devpost's
+     `submission_period_dates`, stored as the last second of that UTC day),
    - **not** invite-only,
    - offering at least one cash prize (`prizes_counts.cash >= 1`),
    - with a prize amount that parses to a number above 0.
@@ -33,16 +37,27 @@ sits at the top; a $100k prize with 30,000 registrants sinks to the bottom.
    a currency the table doesn't know (or an ambiguous symbol like ¥) keeps
    its raw value, is marked "currency not converted", and is always listed
    after every converted prize.
-4. Ranks by approximate USD prize per registrant and writes:
+4. Flags suspicious dollar amounts instead of letting them jump the queue.
+   Indian-style digit grouping (`1,55,000`, `1,00,000`) on a non-rupee
+   prize, or a very large dollar prize at a college or university with very
+   few registrants, gets a **verify currency** badge. Those rows are ranked
+   below the others, using a conservative rupee reading of the same number.
+   The listed amount and the normal exchange-rate conversion are still stored.
+5. Marks **includes non-cash prizes** when the prize text mentions credits,
+   bitcoin/BTC/crypto/tokens, subscriptions, swag, or goodies.
+6. Ranks by approximate USD prize per registrant and writes:
    - `docs/index.html` — a simple, mobile-friendly table with links,
    - `docs/hackathons.json` — the same data, machine-readable,
    - both stamped with a "last updated" UTC time.
 
 The table shows the prize as listed (plus "≈ $…" for non-dollar prizes),
-number of registrants, approximate USD per registrant, time left to submit,
-and whether the hackathon is online. `hackathons.json` keeps the original
-amount and currency next to `prize_usd_approx` and
-`usd_per_registrant_approx`, and records the rate table and its date.
+number of registrants, approximate USD per registrant, the submission
+deadline, and whether the hackathon is online. Time left is counted in the
+browser from that deadline, and a row hides itself once the deadline has
+passed. The header says how many rows are shown and how many were skipped.
+`hackathons.json` keeps the original amount and currency next to
+`prize_usd_approx` and `usd_per_registrant_approx`, plus
+`submission_deadline_utc`, and records the rate table and its date.
 
 ## How to run it
 
@@ -88,14 +103,14 @@ python3 -m pip install -r requirements-dev.txt
 python3 -m pytest tests/ -q
 ```
 
-## Daily updates
+## Updates
 
-[`.github/workflows/update.yml`](.github/workflows/update.yml) runs every day
-at 06:00 UTC (and on manual trigger from the Actions tab). It runs the
-tests, regenerates `docs/`, and commits any changed files to `main` using
-`permissions: contents: write`. GitHub Pages serves `docs/` at the live page
-above (enable Pages → Deploy from a branch → `main` / `docs` if it is not
-already on).
+[`.github/workflows/update.yml`](.github/workflows/update.yml) runs twice a
+day, at 06:00 and 18:00 UTC (and on manual trigger from the Actions tab).
+GitHub may run it a few hours late. It runs the tests, regenerates `docs/`,
+and commits any changed files to `main` using `permissions: contents: write`.
+GitHub Pages serves `docs/` at the live page above (enable Pages → Deploy
+from a branch → `main` / `docs` if it is not already on).
 
 ## Honest limits
 
@@ -104,12 +119,20 @@ already on).
 - **Registrants are not submissions.** Most people who register never
   submit a project, so real odds are usually better than the raw numbers
   suggest — but prize-per-registrant is a heuristic, not a prediction.
-- **Prizes are not verified.** Amounts are self-reported by organisers, may
-  be split across many tracks or teams, and currencies are shown exactly as
-  Devpost lists them. The US-dollar values used for ranking come from
-  approximate, hard-coded exchange rates (see `FX_RATES_DATE` in
-  `hackathons.py`) that are not updated automatically, so treat them as
-  rough. Prizes in a currency without a known rate are listed last.
+- **Prizes are not verified.** Amounts are self-reported by organisers and
+  may be split across many tracks or teams. Each amount is shown as listed
+  and converted to approximate US dollars with hard-coded exchange rates
+  (see `FX_RATES_DATE` in `hackathons.py`) that are not updated
+  automatically. That dollar figure is what the ranking uses, and it is
+  shown next to non-dollar prizes. A **verify currency** badge means the
+  figure looks like rupees mislabeled as dollars; those rows are ranked
+  below the others. Prizes in a currency without a known rate are listed
+  after the converted ones. **Includes non-cash prizes** means the prize
+  text mentions credits, bitcoin, crypto, tokens, subscriptions, swag, or
+  goodies.
+- **Deadlines are dates.** Devpost's listing gives a submission end date,
+  not a clock time. This tool treats that as the end of the UTC day. The
+  page counts down from it and hides the row when the moment has passed.
 - **Check the rules.** Always read each hackathon's rules page for
   eligibility, team size, residency restrictions and exact prize conditions
   before entering.
