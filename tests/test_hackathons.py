@@ -2,6 +2,7 @@
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -460,3 +461,340 @@ class TestCurrencyOutput:
         out = capsys.readouterr().out
         assert "~USD" in out
         assert "~$210" in out
+
+
+# ---------------------------------------------------------------------------
+# Submission deadlines
+# ---------------------------------------------------------------------------
+
+def utc(*parts) -> datetime:
+    return datetime(*parts, tzinfo=timezone.utc)
+
+
+class TestSubmissionDeadline:
+    def test_same_month_range(self):
+        # Life After Code / Engage 6.0 style: "Oct 05 - 27, 2026"
+        deadline = hackathons.parse_submission_deadline("Oct 05 - 27, 2026")
+        assert deadline == utc(2026, 10, 27, 23, 59, 59)
+        assert hackathons.format_deadline_display(deadline) == "Oct 27, 2026"
+
+    def test_cross_month_range(self):
+        assert hackathons.parse_submission_deadline("Aug 26 - Oct 30, 2026") == utc(2026, 10, 30, 23, 59, 59)
+        assert hackathons.parse_submission_deadline("Oct 27 - 28, 2026") == utc(2026, 10, 28, 23, 59, 59)
+        assert hackathons.parse_submission_deadline("Sep 24 - Nov 18, 2026") == utc(2026, 11, 18, 23, 59, 59)
+
+    def test_year_rollover(self):
+        assert hackathons.parse_submission_deadline("Dec 20, 2026 - Jan 05, 2027") == utc(2027, 1, 5, 23, 59, 59)
+        assert hackathons.parse_submission_deadline("Dec 28 - Jan 05, 2027") == utc(2027, 1, 5, 23, 59, 59)
+        assert hackathons.parse_submission_deadline("Dec 28, 2026 - Jan 05") == utc(2027, 1, 5, 23, 59, 59)
+
+    def test_unparseable(self):
+        assert hackathons.parse_submission_deadline("") is None
+        assert hackathons.parse_submission_deadline(None) is None
+        assert hackathons.parse_submission_deadline("soon") is None
+        assert hackathons.parse_submission_deadline("Oct 05 - 27") is None  # no year
+
+    def test_invalid_calendar_day(self):
+        assert hackathons.parse_submission_deadline("Feb 01 - 31, 2026") is None
+
+    def test_keeps_hackathon_on_its_last_day(self):
+        item = make_item(
+            title="Life After Code",
+            time_left_to_submission="about 2 hours left",
+            submission_period_dates="Oct 05 - 27, 2026",
+        )
+        morning = utc(2026, 10, 27, 11, 16, 14)
+        entry = hackathons.build_entry(item, now=morning)
+        assert entry is not None
+        assert entry["submission_deadline_utc"] == "2026-10-27T23:59:59Z"
+        assert entry["submission_deadline_display"] == "Oct 27, 2026"
+        assert "about 2 hours left" == entry["time_left_to_submission"]
+
+    def test_drops_once_end_date_has_passed_even_if_time_left_text_says_open(self):
+        # The stale Devpost sentence is not the deadline. The end date is.
+        for title, dates in (
+            ("Life After Code", "Oct 05 - 27, 2026"),
+            ("Engage 6.0 – Code with AI Hackathon", "Oct 21 - 27, 2026"),
+        ):
+            item = make_item(
+                title=title,
+                time_left_to_submission="about 2 hours left",
+                submission_period_dates=dates,
+            )
+            assert hackathons.build_entry(item, now=utc(2026, 10, 28, 0, 0, 1)) is None
+
+    def test_drops_at_the_deadline_instant(self):
+        item = make_item(submission_period_dates="Oct 21 - 27, 2026")
+        assert hackathons.build_entry(item, now=utc(2026, 10, 27, 23, 59, 59)) is None
+
+    def test_missing_date_is_kept(self):
+        entry = hackathons.build_entry(make_item(submission_period_dates=""))
+        assert entry is not None
+        assert entry["submission_deadline_utc"] is None
+
+    def test_time_left_formatting(self):
+        deadline = utc(2026, 10, 27, 23, 59, 59)
+        assert hackathons.format_time_left(deadline, utc(2026, 10, 28, 0, 0)) == "ended"
+        assert hackathons.format_time_left(deadline, utc(2026, 10, 27, 23, 59, 30)) == "less than a minute left"
+        assert hackathons.format_time_left(deadline, utc(2026, 10, 27, 22, 0)) == "1 hour left"
+        assert hackathons.format_time_left(deadline, utc(2026, 10, 27, 11, 16)) == "12 hours left"
+        assert hackathons.format_time_left(deadline, utc(2026, 10, 26, 12, 0)) == "1 day left"
+        assert hackathons.format_time_left(deadline, utc(2026, 10, 24, 15, 0)) == "3 days left"
+
+
+# ---------------------------------------------------------------------------
+# Suspicious currency and non-cash prizes
+# ---------------------------------------------------------------------------
+
+class TestCurrencyReview:
+    def test_indian_grouping_examples(self):
+        assert hackathons.has_indian_digit_grouping("1,55,000 total prize pool")
+        assert hackathons.has_indian_digit_grouping("Rs 1,00,000")
+        assert hackathons.has_indian_digit_grouping("7,00,000")
+        assert hackathons.has_indian_digit_grouping("10,00,000")
+        assert not hackathons.has_indian_digit_grouping("150,000")
+        assert not hackathons.has_indian_digit_grouping("1,000,000")
+        assert not hackathons.has_indian_digit_grouping("45,000")
+        assert not hackathons.has_indian_digit_grouping("10,000")
+
+    def test_lakh_style_dollar_amount_is_flagged(self):
+        entry = hackathons.build_entry(make_item(
+            title="Engage 6.0",
+            prize_amount="$<span data-currency-value>1,55,000</span>",
+            registrations_count=22,
+            organization_name="The Northcap University",
+            displayed_location={"location": "The NorthCap University"},
+        ))
+        assert entry["currency_needs_review"] is True
+        assert "indian_digit_grouping" in entry["currency_review_reasons"]
+        # Listed currency is still run through the fx table (here it is USD).
+        assert entry["prize_currency_code"] == "USD"
+        assert entry["prize_usd_approx"] == 155000.0
+        assert entry["currency_known"] is True
+
+    def test_one_lakh_grouping_is_flagged_without_a_college(self):
+        entry = hackathons.build_entry(make_item(
+            prize_amount="$<span data-currency-value>1,00,000</span>",
+            registrations_count=5000,
+            organization_name="Some Company",
+            displayed_location={"location": "Online"},
+        ))
+        assert entry["currency_needs_review"] is True
+        assert entry["currency_review_reasons"] == ["indian_digit_grouping"]
+
+    def test_large_college_dollar_prize_with_few_registrants(self):
+        sustain = hackathons.build_entry(make_item(
+            title="SUSTAIN-A-THON 2.0",
+            prize_amount=USD.format("150,000"),
+            registrations_count=38,
+            organization_name="Sharda University Greater Noida",
+            displayed_location={"location": "Block 45, Sharda University, "},
+        ))
+        engage = hackathons.build_entry(make_item(
+            title="Engage 6.0",
+            prize_amount=USD.format("45,000"),
+            registrations_count=22,
+            organization_name="The Northcap University",
+            displayed_location={"location": "The NorthCap University"},
+        ))
+        assert sustain["currency_needs_review"] is True
+        assert "large_college_prize" in sustain["currency_review_reasons"]
+        assert sustain["prize_usd_approx"] == 150000.0
+        assert engage["currency_needs_review"] is True
+        assert "large_college_prize" in engage["currency_review_reasons"]
+
+    def test_real_rupee_symbol_is_not_flagged(self):
+        entry = hackathons.build_entry(make_item(
+            prize_amount=INR.format("1,00,000"),
+            registrations_count=14,
+            organization_name="VIT Bhopal University",
+            displayed_location={"location": "VIT Bhopal University"},
+        ))
+        assert entry["currency_needs_review"] is False
+        assert entry["prize_currency_code"] == "INR"
+        assert entry["currency_review_reasons"] == []
+
+    def test_large_dollar_prize_with_many_registrants_is_not_flagged(self):
+        meta = hackathons.build_entry(make_item(
+            title="Meta VR Start Developer Competition 2026",
+            prize_amount=USD.format("1,000,000"),
+            registrations_count=4169,
+            organization_name="Meta",
+            displayed_location={"location": "Online"},
+        ))
+        cal = hackathons.build_entry(make_item(
+            title="Cal Hacks 13.0",
+            prize_amount=USD.format("159,822"),
+            registrations_count=1457,
+            organization_name="Cal Hacks",
+            displayed_location={"location": "Palace of Fine Arts"},
+        ))
+        assert meta["currency_needs_review"] is False
+        assert cal["currency_needs_review"] is False
+
+    def test_small_college_prize_is_not_flagged(self):
+        entry = hackathons.build_entry(make_item(
+            prize_amount=USD.format("500"),
+            registrations_count=20,
+            organization_name="State University",
+            displayed_location={"location": "State University"},
+        ))
+        assert entry["currency_needs_review"] is False
+
+    def test_boundaries(self):
+        college = {
+            "organization_name": "State University",
+            "displayed_location": {"location": "State University"},
+        }
+        at_cap = hackathons.build_entry(make_item(
+            registrations_count=hackathons.SUSPICIOUS_REGISTRANT_MAX,
+            prize_amount=USD.format("20,000"),
+            **college,
+        ))
+        one_more_person = hackathons.build_entry(make_item(
+            registrations_count=hackathons.SUSPICIOUS_REGISTRANT_MAX + 1,
+            prize_amount=USD.format("20,000"),
+            **college,
+        ))
+        just_under = hackathons.build_entry(make_item(
+            registrations_count=10,
+            prize_amount=USD.format("19,999"),
+            **college,
+        ))
+        assert at_cap["currency_needs_review"] is True
+        assert one_more_person["currency_needs_review"] is False
+        assert just_under["currency_needs_review"] is False
+
+    def test_flagged_rows_rank_below_unflagged_ones(self):
+        flagged = make_item(
+            title="College",
+            prize_amount=USD.format("150,000"),
+            registrations_count=38,
+            organization_name="Sharda University",
+            displayed_location={"location": "Sharda University"},
+        )
+        tiny = make_item(title="Tiny", prize_amount=USD.format("30"), registrations_count=152)
+        tiny_inr = make_item(
+            title="Tiny INR",
+            prize_amount=INR.format("1,000"),
+            registrations_count=1000,
+        )
+        ranked = hackathons.build_entries([flagged, tiny, tiny_inr])
+        assert ranked[-1]["title"] == "College"
+        assert ranked[-1]["currency_needs_review"] is True
+        # The fx conversion of the listed dollars is unchanged.
+        assert ranked[-1]["prize_usd_approx"] == 150000.0
+
+    def test_flagged_rows_are_ordered_by_a_rupee_reading(self):
+        bigger = make_item(
+            title="Bigger",
+            prize_amount=USD.format("150,000"),
+            registrations_count=38,
+            organization_name="Sharda University",
+        )
+        smaller = make_item(
+            title="Smaller",
+            prize_amount=USD.format("45,000"),
+            registrations_count=22,
+            organization_name="NorthCap University",
+        )
+        ranked = hackathons.build_entries([smaller, bigger])
+        assert [e["title"] for e in ranked] == ["Bigger", "Smaller"]
+        # 150,000 INR / 38 people is more per person than 45,000 INR / 22.
+        inr = hackathons.UNITS_PER_USD["INR"]
+        assert 150000 / inr / 38 > 45000 / inr / 22
+
+    def test_indian_grouped_amount_cannot_outrank_a_known_prize(self):
+        suspicious = make_item(
+            title="Grouped",
+            prize_amount="$<span data-currency-value>1,55,000</span>",
+            registrations_count=1,
+        )
+        ordinary = make_item(title="Ordinary", prize_amount=USD.format("100"), registrations_count=10)
+        ranked = hackathons.build_entries([suspicious, ordinary])
+        assert [e["title"] for e in ranked] == ["Ordinary", "Grouped"]
+
+
+class TestNonCashPrizes:
+    @pytest.mark.parametrize("word", [
+        "credits", "credit", "Bitcoin", "BTC", "crypto", "cryptocurrency",
+        "tokens", "token", "subscription", "subscriptions", "swag", "goodies",
+    ])
+    def test_keywords_set_the_flag(self, word):
+        raw = f"$<span data-currency-value>5,000</span> plus {word}"
+        entry = hackathons.build_entry(make_item(prize_amount=raw))
+        assert entry is not None
+        assert entry["prize_amount"] == 5000.0
+        assert entry["includes_non_cash_prizes"] is True
+
+    def test_plain_cash_is_not_flagged(self):
+        entry = hackathons.build_entry(make_item())
+        assert entry["includes_non_cash_prizes"] is False
+
+    def test_keyword_inside_another_word_does_not_match(self):
+        assert not hackathons.prize_text_includes_non_cash("accredited tokenizer swagger")
+
+
+class TestPageCopy:
+    def test_html_shows_live_deadline_badges_and_counts(self, tmp_path):
+        entries = hackathons.build_entries([
+            make_item(title="Ordinary", prize_amount=USD.format("100"), registrations_count=10),
+            make_item(
+                title="College",
+                prize_amount=USD.format("150,000") + " plus goodies",
+                registrations_count=38,
+                organization_name="Sharda University",
+                displayed_location={"location": "Sharda University"},
+                submission_period_dates="Oct 27 - 28, 2026",
+            ),
+        ])
+        stats = {"total_count": 5, "fetched": 5, "pages_fetched": 1, "complete": True}
+        out = tmp_path / "index.html"
+        hackathons.write_html_doc(entries, stats, out)
+        html = out.read_text(encoding="utf-8")
+
+        assert html.index("Ordinary") < html.index("College")
+        assert "class='badge verify'>verify currency</span>" in html
+        assert "class='badge noncash'>includes non-cash prizes</span>" in html
+        assert "data-deadline='2026-11-05T23:59:59Z'" in html
+        assert "data-deadline='2026-10-28T23:59:59Z'" in html
+        assert "Deadline: Nov 5, 2026" in html
+        assert "Deadline: Oct 28, 2026" in html
+        assert "Date.now()" in html
+        assert "ended since the last refresh" in html
+        assert "2 shown (3 skipped: no cash prize or invite-only, or deadline passed)" in html
+        assert "around 06:00" not in html
+        assert "06:00 UTC" not in html
+        assert hackathons.UPDATE_CADENCE in html
+        assert "GitHub may run it a few hours late" in html
+        assert "without conversion" not in html
+        assert "verify currency" in html
+        assert "hard-coded exchange rates" in html
+
+    def test_json_records_deadline_and_counts(self, tmp_path):
+        entries = hackathons.build_entries([make_item()])
+        out = tmp_path / "hackathons.json"
+        hackathons.write_json_doc(entries, {"total_count": 4, "fetched": 4, "complete": True}, out)
+        doc = json.loads(out.read_text(encoding="utf-8"))
+        assert doc["stats"]["shown"] == 1
+        assert doc["stats"]["skipped"] == 3
+        assert doc["hackathons"][0]["submission_deadline_utc"] == "2026-11-05T23:59:59Z"
+        assert "without conversion" not in doc["note"]
+        assert "verify currency" in doc["note"]
+
+    def test_coverage_mentions_a_partial_fetch(self):
+        text = hackathons.coverage_summary(2, {"fetched": 5, "complete": False})
+        assert text.startswith("2 shown (3 skipped:")
+        assert "partial fetch" in text
+
+    def test_readme_and_workflow_match_the_schedule(self):
+        root = Path(__file__).resolve().parents[1]
+        readme = (root / "README.md").read_text(encoding="utf-8")
+        workflow = (root / ".github" / "workflows" / "update.yml").read_text(encoding="utf-8")
+        assert "around 06:00" not in readme
+        assert "without conversion" not in readme
+        assert "GitHub may run it a few hours late" in readme
+        assert "18:00" in readme
+        assert "verify currency" in readme.lower()
+        assert 'cron: "0 6 * * *"' in workflow
+        assert 'cron: "0 18 * * *"' in workflow
