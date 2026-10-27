@@ -755,6 +755,7 @@ class TestPageCopy:
 
         assert html.index("Ordinary") < html.index("College")
         assert "class='badge verify'>verify currency</span>" in html
+        assert "ranked lower" in html
         assert "class='badge noncash'>includes non-cash prizes</span>" in html
         assert "data-deadline='2026-11-05T23:59:59Z'" in html
         assert "data-deadline='2026-10-28T23:59:59Z'" in html

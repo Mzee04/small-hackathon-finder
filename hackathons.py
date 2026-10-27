@@ -706,7 +706,9 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
             f"{badges}"
             f"<div class='sub'>{_esc(themes)}</div></td>"
             f"<td class='num'>{_esc(e['prize_display'])}{usd_note}<div class='sub'>{e['cash_prizes']} cash prize{'s' if e['cash_prizes'] != 1 else ''}</div></td>"
-            f"<td class='num'>{e['registrations_count']:,}<div class='sub'>{_esc(per_reg)} / registrant</div></td>"
+            f"<td class='num'>{e['registrations_count']:,}<div class='sub'>{_esc(per_reg)} / registrant</div>"
+            + ("<div class='sub'>ranked lower</div>" if e.get("currency_needs_review") else "")
+            + "</td>"
             f"<td>{time_cell}</td>"
             f"<td class='where'>{'🌐' if e['is_online'] else '📍'} {where}</td>"
             "</tr>"
