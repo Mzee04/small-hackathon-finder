@@ -85,8 +85,11 @@ Other options: `--delay SECONDS` (pause between pages) and `--help`.
 ## How to use the list
 
 Open the [live page](https://mzee04.github.io/small-hackathon-finder/) (or
-your generated `index.html`). The best odds are at the top. Click a title
-to open that hackathon on Devpost, then read its rules before entering.
+your generated `index.html`). The best odds are at the top. Only online
+hackathons are listed until you tick **Show in-person events too**. An
+event Devpost marks as online, including one that only lists a host city,
+shows as Online. Click a title to open that hackathon on Devpost, then read
+its rules before entering.
 For scripts, use [`hackathons.json`](https://mzee04.github.io/small-hackathon-finder/hackathons.json).
 
 ## Run the tests

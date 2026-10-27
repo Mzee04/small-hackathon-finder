@@ -123,9 +123,11 @@ class TestBuildEntry:
         assert hackathons.build_entry(make_item(prize_amount=None)) is None
 
     def test_in_person_location(self):
-        entry = hackathons.build_entry(make_item(displayed_location={"location": "New York, NY"}))
+        entry = hackathons.build_entry(make_item(
+            displayed_location={"icon": "map-marker-alt", "location": "Palace of Fine Arts"},
+        ))
         assert entry["is_online"] is False
-        assert entry["location"] == "New York, NY"
+        assert entry["location"] == "Palace of Fine Arts"
 
     def test_zero_registrants_counted_as_one_for_ratio(self):
         entry = hackathons.build_entry(make_item(registrations_count=0))
@@ -763,7 +765,10 @@ class TestPageCopy:
         assert "Deadline: Oct 28, 2026" in html
         assert "Date.now()" in html
         assert "ended since the last refresh" in html
-        assert "2 shown (3 skipped: no cash prize or invite-only, or deadline passed)" in html
+        assert "1 online shown (1 in-person hidden, 3 skipped: no cash prize or invite-only, or deadline passed)" in html
+        assert "Show in-person events too" in html
+        assert "data-online='1'" in html
+        assert "data-online='0'" in html
         assert "around 06:00" not in html
         assert "06:00 UTC" not in html
         assert hackathons.UPDATE_CADENCE in html
@@ -779,13 +784,15 @@ class TestPageCopy:
         doc = json.loads(out.read_text(encoding="utf-8"))
         assert doc["stats"]["shown"] == 1
         assert doc["stats"]["skipped"] == 3
+        assert doc["stats"]["online"] == 1
+        assert doc["stats"]["in_person"] == 0
         assert doc["hackathons"][0]["submission_deadline_utc"] == "2026-11-05T23:59:59Z"
         assert "without conversion" not in doc["note"]
         assert "verify currency" in doc["note"]
 
     def test_coverage_mentions_a_partial_fetch(self):
-        text = hackathons.coverage_summary(2, {"fetched": 5, "complete": False})
-        assert text.startswith("2 shown (3 skipped:")
+        text = hackathons.coverage_summary(2, {"fetched": 5, "complete": False}, online=1, in_person=1)
+        assert text.startswith("1 online shown (1 in-person hidden, 3 skipped:")
         assert "partial fetch" in text
 
     def test_readme_and_workflow_match_the_schedule(self):
@@ -799,3 +806,67 @@ class TestPageCopy:
         assert "verify currency" in readme.lower()
         assert 'cron: "0 6 * * *"' in workflow
         assert 'cron: "0 18 * * *"' in workflow
+        assert "Show in-person events too" in readme
+
+
+class TestOnlineClassification:
+    def test_globe_icon_is_online_even_with_a_host_city(self):
+        entry = hackathons.build_entry(make_item(
+            displayed_location={"icon": "globe", "location": "New York, NY"},
+        ))
+        assert entry["is_online"] is True
+        assert entry["location"] == "New York, NY"
+        assert entry["location_icon"] == "globe"
+
+    def test_explicit_online_flag_wins(self):
+        entry = hackathons.build_entry(make_item(
+            online=True,
+            displayed_location={"icon": "map-marker-alt", "location": "Fort Worth"},
+        ))
+        assert entry["is_online"] is True
+
+    def test_online_word_in_location(self):
+        for location in ("Online", "Online, from anywhere", "Santa Clara Convention Center + Online"):
+            entry = hackathons.build_entry(make_item(
+                displayed_location={"icon": "map-marker-alt", "location": location},
+            ))
+            assert entry["is_online"] is True, location
+
+    def test_renderjuice_host_city_is_online(self):
+        entry = hackathons.build_entry(make_item(
+            title="RenderJuice Blender Animation & Programmatic Rendering Contest",
+            displayed_location={"icon": "map-marker-alt", "location": "New York, NY"},
+        ))
+        assert entry["is_online"] is True
+
+    def test_venues_stay_in_person(self):
+        places = [
+            "VIT Bhopal University",
+            "Fort Worth",
+            "SSM cultural centre",
+            "Block 45, Sharda University, ",
+            "Palace of Fine Arts",
+        ]
+        for location in places:
+            entry = hackathons.build_entry(make_item(
+                displayed_location={"icon": "map-marker-alt", "location": location},
+            ))
+            assert entry["is_online"] is False, location
+
+    def test_html_hides_in_person_until_the_box_is_ticked(self, tmp_path):
+        entries = hackathons.build_entries([
+            make_item(title="Remote", displayed_location={"icon": "globe", "location": "Online"}),
+            make_item(
+                title="On Campus",
+                displayed_location={"icon": "map-marker-alt", "location": "VIT Bhopal University"},
+            ),
+        ])
+        out = tmp_path / "index.html"
+        hackathons.write_html_doc(entries, {"total_count": 2, "fetched": 2, "complete": True}, out)
+        html = out.read_text(encoding="utf-8")
+        assert "Show in-person events too" in html
+        assert 'id="show-in-person"' in html
+        assert "data-online='1'" in html and "🌐 Online" in html
+        assert "data-online='0'" in html and "📍 VIT Bhopal University" in html
+        assert "1 online shown (1 in-person hidden, 0 skipped:" in html
+        assert "showInPerson" in html
