@@ -434,6 +434,41 @@ def _as_utc(now: Optional[datetime]) -> datetime:
     return now.astimezone(timezone.utc)
 
 
+# Devpost's globe icon is its online flag. A map pin can still be an online
+# contest: the location text says "Online", "City + Online", or only a host
+# city such as "New York, NY" (not a venue you have to visit).
+_ONLINE_WORD_RE = re.compile(r"\b(?:online|virtual|remote)\b", re.IGNORECASE)
+_HOST_CITY_RE = re.compile(r"^[A-Za-z][A-Za-z .'-]*,\s*[A-Z]{2}$")
+
+
+def _location_record(item: Dict[str, Any]) -> Dict[str, Any]:
+    displayed = item.get("displayed_location") or {}
+    return displayed if isinstance(displayed, dict) else {}
+
+
+def event_is_online(item: Dict[str, Any]) -> bool:
+    """True when Devpost marks the hackathon online, including a host city.
+
+    An explicit boolean on the item or on displayed_location wins. Otherwise
+    the globe icon, the word online/virtual/remote in the location, or a
+    bare host city ("New York, NY") counts as online. A venue, campus, or
+    city name without that pattern stays in-person.
+    """
+    displayed = _location_record(item)
+    for source in (item, displayed):
+        for key in ("is_online", "online"):
+            value = source.get(key)
+            if isinstance(value, bool):
+                return value
+    icon = str(displayed.get("icon") or "").lower()
+    if "globe" in icon:
+        return True
+    location = str(displayed.get("location") or "").strip()
+    if _ONLINE_WORD_RE.search(location):
+        return True
+    return _HOST_CITY_RE.match(location) is not None
+
+
 def build_entry(
     item: Dict[str, Any],
     now: Optional[datetime] = None,
@@ -466,7 +501,9 @@ def build_entry(
     prize_usd = to_usd(amount, symbol)
     registrants = item.get("registrations_count")
     registrants = registrants if isinstance(registrants, int) and registrants >= 0 else 0
-    location = (item.get("displayed_location") or {}).get("location") or ""
+    displayed = _location_record(item)
+    location = displayed.get("location") or ""
+    location_icon = displayed.get("icon") or ""
     themes = [t.get("name") for t in (item.get("themes") or []) if t.get("name")]
     title = item.get("title") or "Untitled hackathon"
     organization = item.get("organization_name") or ""
@@ -503,7 +540,8 @@ def build_entry(
         "submission_deadline_utc": deadline_to_iso(deadline) if deadline else None,
         "submission_deadline_display": format_deadline_display(deadline) if deadline else "",
         "location": location,
-        "is_online": location.strip().lower() == "online",
+        "location_icon": location_icon,
+        "is_online": event_is_online(item),
         "themes": themes,
         "organization_name": organization,
     }
@@ -561,22 +599,34 @@ def _stats_with_shown(entries: List[Dict[str, Any]], stats: Dict[str, Any]) -> D
     if isinstance(fetched, int):
         out["shown"] = len(entries)
         out["skipped"] = fetched - len(entries)
+    online = sum(1 for entry in entries if entry.get("is_online"))
+    out["online"] = online
+    out["in_person"] = len(entries) - online
     return out
 
 
-def coverage_summary(shown: int, stats: Dict[str, Any]) -> str:
-    """'32 shown (19 skipped: no cash prize or invite-only, or deadline passed)'."""
+def coverage_summary(
+    shown: int,
+    stats: Dict[str, Any],
+    online: Optional[int] = None,
+    in_person: Optional[int] = None,
+) -> str:
+    """'24 online shown (7 in-person hidden, 19 skipped: ...)'."""
+    if online is None:
+        online = shown
+    if in_person is None:
+        in_person = max(shown - online, 0)
     fetched = stats.get("fetched")
     if isinstance(fetched, int):
         skipped = fetched - shown
         if skipped < 0:
             skipped = 0
         text = (
-            f"{shown} shown ({skipped} skipped: no cash prize or invite-only, "
-            "or deadline passed)"
+            f"{online} online shown ({in_person} in-person hidden, "
+            f"{skipped} skipped: no cash prize or invite-only, or deadline passed)"
         )
     else:
-        text = f"{shown} shown"
+        text = f"{online} online shown ({in_person} in-person hidden)"
     if not stats.get("complete", True):
         text += " (partial fetch - a page failed, see hackathons.json)"
     return text
@@ -634,21 +684,37 @@ PAGE_SCRIPT = """<script>
     return plural(minutes, "minute");
   }
   function refresh() {
+    var box = document.getElementById("show-in-person");
+    var showInPerson = !!(box && box.checked);
     var rows = document.querySelectorAll("tbody tr");
-    var hidden = 0;
+    var ended = 0;
+    var onlineShown = 0;
+    var inPersonShown = 0;
+    var inPersonHidden = 0;
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
       var iso = row.getAttribute("data-deadline");
-      if (!iso) continue;
-      var end = Date.parse(iso);
-      var text = row.querySelector(".timeleft-text");
-      if (isNaN(end) || end <= Date.now()) {
+      var online = row.getAttribute("data-online") !== "0";
+      var past = false;
+      if (iso) {
+        var end = Date.parse(iso);
+        var text = row.querySelector(".timeleft-text");
+        if (isNaN(end) || end <= Date.now()) past = true;
+        else if (text) text.textContent = label(end - Date.now());
+      }
+      if (past) {
         row.style.display = "none";
-        hidden += 1;
+        ended += 1;
         continue;
       }
-      row.style.display = "";
-      if (text) text.textContent = label(end - Date.now());
+      if (!online && !showInPerson) {
+        row.style.display = "none";
+        inPersonHidden += 1;
+        continue;
+      }
+      row.style.display = "table-row";
+      if (online) onlineShown += 1;
+      else inPersonShown += 1;
     }
     var rank = 1;
     for (var j = 0; j < rows.length; j++) {
@@ -657,13 +723,20 @@ PAGE_SCRIPT = """<script>
       if (cell) cell.textContent = String(rank++);
     }
     var el = document.getElementById("coverage-text");
-    if (el && hidden > 0) {
-      var skipped = el.getAttribute("data-skipped") || "0";
-      el.textContent = (rank - 1) + " shown (" + skipped +
-        " skipped: no cash prize or invite-only, or deadline passed; " +
-        hidden + " ended since the last refresh)";
+    if (!el) return;
+    var skipped = el.getAttribute("data-skipped") || "0";
+    var endedNote = ended ? "; " + ended + " ended since the last refresh" : "";
+    var skipNote = skipped + " skipped: no cash prize or invite-only, or deadline passed";
+    if (showInPerson) {
+      el.textContent = (onlineShown + inPersonShown) + " shown (" + onlineShown +
+        " online, " + inPersonShown + " in-person; " + skipNote + endedNote + ")";
+    } else {
+      el.textContent = onlineShown + " online shown (" + inPersonHidden +
+        " in-person hidden, " + skipNote + endedNote + ")";
     }
   }
+  var toggle = document.getElementById("show-in-person");
+  if (toggle) toggle.addEventListener("change", refresh);
   refresh();
   setInterval(refresh, 60000);
 })();
@@ -675,8 +748,14 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
     updated = utc_now_iso()
     now = utc_now()
     rows = []
-    for i, e in enumerate(entries, start=1):
+    online_rank = 0
+    for e in entries:
         where = "Online" if e["is_online"] else _esc(e["location"] or "See site")
+        if e["is_online"]:
+            online_rank += 1
+            rank_cell = str(online_rank)
+        else:
+            rank_cell = ""
         themes = ", ".join(e["themes"][:3]) + ("..." if len(e["themes"]) > 3 else "")
         per_reg = format_per_registrant(e)
         usd_note = ""
@@ -699,9 +778,10 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
         else:
             time_cell = _esc(e.get("time_left_to_submission") or "-")
             deadline_attr = ""
+        online_attr = "1" if e["is_online"] else "0"
         rows.append(
-            f"<tr{deadline_attr}>"
-            f"<td class='rank'>{i}</td>"
+            f"<tr{deadline_attr} data-online='{online_attr}'>"
+            f"<td class='rank'>{rank_cell}</td>"
             f"<td class='title'><a href='{_esc(e['url'])}' target='_blank' rel='noopener noreferrer'>{_esc(e['title'])}</a>"
             f"{badges}"
             f"<div class='sub'>{_esc(themes)}</div></td>"
@@ -714,11 +794,13 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
             "</tr>"
         )
     shown = len(entries)
+    online_count = sum(1 for e in entries if e.get("is_online"))
+    in_person_count = shown - online_count
     fetched = stats.get("fetched")
     skipped = fetched - shown if isinstance(fetched, int) else 0
     if skipped < 0:
         skipped = 0
-    coverage = coverage_summary(shown, stats)
+    coverage = coverage_summary(shown, stats, online=online_count, in_person=in_person_count)
 
     html_doc = f"""<!DOCTYPE html>
 <html lang="en">
@@ -747,6 +829,9 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
            padding: .05rem .4rem; border-radius: 999px; color: #1a1a1a; }}
   .badge.verify {{ background: #f5c518; }}
   .badge.noncash {{ background: #c9ddff; }}
+  .toggle {{ display: flex; align-items: center; gap: .5rem; margin: 1rem 0 0; font-weight: 600; }}
+  .toggle input {{ width: 1.15rem; height: 1.15rem; }}
+  tr[data-online="0"] {{ display: none; }}
   a {{ color: #0969da; }}
   @media (prefers-color-scheme: dark) {{ a {{ color: #4da3ff; }} }}
   footer {{ margin-top: 1.5rem; font-size: .8rem; color: #888; }}
@@ -758,9 +843,12 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
 (fewer registrants &rarr; higher on the list). Non-dollar prizes are converted to
 approximate US dollars for ranking (rough rates from {_esc(FX_RATES_DATE)}).
 Rows marked verify currency are ranked lower. Time left is counted in your browser
-from the submission deadline. Updated {_esc(UPDATE_CADENCE)}.</p>
+from the submission deadline. Online hackathons are shown first; tick the box
+to include in-person events. Updated {_esc(UPDATE_CADENCE)}.</p>
 <p class="updated">Last updated: <time datetime="{_esc(updated)}">{_esc(updated)}</time>
- &middot; <span id="coverage-text" data-shown="{shown}" data-skipped="{skipped}">{_esc(coverage)}</span></p>
+ &middot; <span id="coverage-text" data-shown="{shown}" data-online="{online_count}" data-in-person="{in_person_count}" data-skipped="{skipped}">{_esc(coverage)}</span></p>
+
+<label class="toggle"><input type="checkbox" id="show-in-person"> Show in-person events too</label>
 
 <div class="note">
 <strong>Read this before picking one &ndash; honest limits</strong>
@@ -804,7 +892,10 @@ def print_report(entries: List[Dict[str, Any]], stats: Dict[str, Any], top: int)
     )
     if not stats.get("complete", True) and stats.get("error"):
         print(f"  fetch error: {stats['error']}")
-    print(coverage_summary(len(entries), stats) + ".")
+    online_count = sum(1 for e in entries if e.get("is_online"))
+    print(coverage_summary(
+        len(entries), stats, online=online_count, in_person=len(entries) - online_count
+    ) + ".")
     print(
         "Ranked by approx. USD prize per registrant. "
         "Rows marked verify currency are listed after the others."
