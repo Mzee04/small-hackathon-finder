@@ -3,10 +3,11 @@
 hackathons that are still open on Devpost.
 
 Fetches every page of Devpost's public JSON listing of open hackathons,
-keeps the ones that are open, not past their submission end date, not
-invite-only, and offer at least one cash prize worth more than zero, ranks
-them by prize money per registered participant (a rough proxy for "realistic
-chance of winning"), and writes:
+then each hackathon page for its "Who can participate" list. Keeps the ones
+that are open, not past their submission end date, not invite-only, and offer
+at least one cash prize worth more than zero, ranks them by prize money per
+registered participant (a rough proxy for "realistic chance of winning"), and
+writes:
 
   docs/hackathons.json  - machine-readable results
   docs/index.html       - simple mobile-friendly table (published via
@@ -75,7 +76,14 @@ LIMITS_NOTE = (
     "prizes'. The countdown uses the submission end date (through the end of "
     "that UTC day), and a row disappears once that moment has passed. Always "
     "read each hackathon's rules page for eligibility, team-size limits and "
-    "exact prize conditions before entering."
+    "exact prize conditions before entering. "
+    "Who can participate is read from each hackathon page. Listings limited "
+    "to students, high school, professionals, partners, or a required team "
+    "are hidden until you ask to see them. A country list that is tighter "
+    "than Devpost's usual sanctions exceptions is marked country-limited, and "
+    "a page that clearly requires a physical robot or other hardware is "
+    "marked too. Neither of those hides the row. If that sidebar cannot be "
+    "read, the row stays visible with no eligibility badge."
 )
 
 # ---------------------------------------------------------------------------
@@ -469,6 +477,421 @@ def event_is_online(item: Dict[str, Any]) -> bool:
     return _HOST_CITY_RE.match(location) is not None
 
 
+# Devpost prints the same sanctions list on most global hackathons. That is
+# not a "this event is only for one country" restriction. Names are matched
+# loosely because the sidebar spells them in a few official ways.
+_STANDARD_EXCEPTION_MARKERS = (
+    "brazil",
+    "crimea",
+    "cuba",
+    "iran",
+    "north korea",
+    "democratic people's republic",
+    "quebec",
+    "russia",
+    "syria",
+)
+_TEAM_LINE_RE = re.compile(
+    r"team required(?:: (\d+)(?:\s*(?:to|–|—|-)\s*(\d+))?\s*members?)?$",
+    re.IGNORECASE,
+)
+_AGE_MIN_RE = re.compile(r"ages \d+\+ only$", re.IGNORECASE)
+_AGE_RANGE_RE = re.compile(r"ages (\d+) to (\d+) only$", re.IGNORECASE)
+_PROFESSIONALS_RE = re.compile(
+    r"\bprofessionals?(?:\s*/\s*post grads)?\s+only\b",
+    re.IGNORECASE,
+)
+_PARTNER_AUDIENCE_RE = re.compile(
+    r"\bcalling all\b(?:\s+\w+){0,8}\s+partners\b"
+    r"|\bpartners?\s+only\b"
+    r"|\bpartner employees\b"
+    r"|\bonly\s+(?:open\s+to\s+)?(?:[\w]+\s+){0,4}partners\b",
+    re.IGNORECASE,
+)
+_HIGH_SCHOOL_AGE_RE = re.compile(
+    r"high[- ]school students(?:\s+ages?)?\s+\d{1,2}\s*(?:to|–|—|-)\s*1[1-8]\b",
+    re.IGNORECASE,
+)
+_HARDWARE_RE = re.compile(
+    r"\b("
+    r"hardware(?:\s+is)?\s+required"
+    r"|bring your (?:own )?(?:robot|hardware|device|kit)"
+    r"|functional robot"
+    r"|autonomous robot"
+    r"|microcontrollers?"
+    r")\b",
+    re.IGNORECASE,
+)
+_ROBOT_WORD_RE = re.compile(r"\brobots?\b", re.IGNORECASE)
+_ROBOT_PARTS_RE = re.compile(
+    r"\b(arduinos?|esp32|raspberry pi|microcontrollers?)\b",
+    re.IGNORECASE,
+)
+_NO_HARDWARE_RE = re.compile(
+    r"\b(?:no hardware(?:\s+is)?\s+required|hardware not required|"
+    r"without (?:any )?hardware|software[- ]only)\b",
+    re.IGNORECASE,
+)
+_GENERIC_STUDENT_LINES = {
+    "students only",
+    "college students only",
+    "university students only",
+    "middle school students only",
+}
+_ID_OPEN_RE_TEMPLATE = r"<([A-Za-z0-9]+)[^>]*\bid=[\"']{element_id}[\"'][^>]*>"
+_LI_INNER_RE = re.compile(r"<li\b[^>]*>(.*?)</li>", re.IGNORECASE | re.DOTALL)
+_TOOLTIP_RE = re.compile(
+    r"\btitle\s*=\s*([\"'])(.*?)\1",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _element_inner_by_id(html: str, element_id: str) -> Optional[str]:
+    """Inner HTML of the first element with this id, respecting nesting."""
+    pattern = re.compile(
+        _ID_OPEN_RE_TEMPLATE.format(element_id=re.escape(element_id)),
+        re.IGNORECASE,
+    )
+    match = pattern.search(html or "")
+    if not match:
+        return None
+    tag = match.group(1)
+    start = match.end()
+    closer = re.compile(rf"</?{tag}\b[^>]*>", re.IGNORECASE)
+    depth = 1
+    for token in closer.finditer(html, start):
+        raw = token.group(0)
+        if raw.startswith("</"):
+            depth -= 1
+            if depth == 0:
+                return html[start:token.start()]
+        elif not raw.rstrip().endswith("/>"):
+            depth += 1
+    return None
+
+
+def _plain_text(fragment: str) -> str:
+    text = _TAG_RE.sub(" ", html_module.unescape(fragment or ""))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _split_countries(tooltip: Optional[str]) -> List[str]:
+    text = html_module.unescape(tooltip or "").replace("’", "'")
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _is_standard_exception_list(names: List[str]) -> bool:
+    """True when every name is one of Devpost's usual sanctions exceptions."""
+    if not names:
+        return False
+    for name in names:
+        folded = re.sub(r"\s+", " ", name.lower().replace("’", "'")).strip()
+        if not any(marker in folded for marker in _STANDARD_EXCEPTION_MARKERS):
+            return False
+    return True
+
+
+def blank_eligibility() -> Dict[str, Any]:
+    """Eligibility we could not read. The listing stays visible, with no badge."""
+    return {
+        "eligibility_known": False,
+        "eligibility_lines": [],
+        "students_only": False,
+        "high_school_only": False,
+        "professionals_only": False,
+        "partners_or_invite_only": False,
+        "team_required": False,
+        "team_size_min": None,
+        "team_size_max": None,
+        "country_limited": False,
+        "countries": [],
+        "needs_hardware": False,
+    }
+
+
+def text_needs_hardware(text: str) -> bool:
+    """True when a page clearly requires a physical robot or other hardware.
+
+    A passing mention is not enough. A line that says hardware is not
+    required wins, so an optional kit does not hide a software event.
+    """
+    if not text or _NO_HARDWARE_RE.search(text):
+        return False
+    if _HARDWARE_RE.search(text):
+        return True
+    return bool(_ROBOT_WORD_RE.search(text) and _ROBOT_PARTS_RE.search(text))
+
+
+def classify_eligibility_line(
+    text: str,
+    tooltip: Optional[str] = None,
+) -> Tuple[Dict[str, Any], str]:
+    """Map one 'Who can participate' line to flags and a display string.
+
+    Open-to-adults lines (age of majority, 18+, Devpost's standard country
+    exceptions, companies excluded) add no flag. Unknown lines that still
+    say 'only' are treated as a closed group.
+    """
+    flags: Dict[str, Any] = {
+        "students_only": False,
+        "high_school_only": False,
+        "professionals_only": False,
+        "partners_or_invite_only": False,
+        "team_required": False,
+        "team_size_min": None,
+        "team_size_max": None,
+        "country_limited": False,
+        "countries": [],
+    }
+    low = re.sub(r"\s+", " ", (text or "")).strip().lower()
+    display = re.sub(r"\s+", " ", (text or "")).strip()
+    countries = _split_countries(tooltip)
+    if not low:
+        return flags, display
+
+    if low.startswith("above legal age of majority") or _AGE_MIN_RE.fullmatch(low):
+        return flags, display
+    if "companies/professional organizations excluded" in low or low.startswith("company not required"):
+        return flags, display
+    if low.startswith("all countries/territories, excluding standard exceptions"):
+        return flags, display
+
+    age_range = _AGE_RANGE_RE.fullmatch(low)
+    if age_range:
+        hi = int(age_range.group(2))
+        if hi <= 18:
+            flags["high_school_only"] = True
+            flags["students_only"] = True
+        elif hi <= 24:
+            # A closed age cap still keeps most adults out.
+            flags["partners_or_invite_only"] = True
+        return flags, display
+
+    if "only specific" in low and "included" in low:
+        flags["country_limited"] = True
+        flags["countries"] = countries
+        if countries:
+            display = f"{display}: {', '.join(countries)}"
+        return flags, display
+    if "countries/territories excluded" in low or low.endswith("countries excluded"):
+        # No tooltip, or only the usual sanctions list: not a country limit.
+        # A list that names somewhere else is.
+        if countries and not _is_standard_exception_list(countries):
+            flags["country_limited"] = True
+            flags["countries"] = countries
+            display = f"{display}: {', '.join(countries)}"
+        return flags, display
+    if re.search(r"\b(us|usa|u\.s\.|united states|uk|united kingdom|india|canada)\s+only\b", low):
+        flags["country_limited"] = True
+        flags["countries"] = countries or [display]
+        return flags, display
+
+    team = _TEAM_LINE_RE.fullmatch(low)
+    if team:
+        flags["team_required"] = True
+        if team.group(1):
+            flags["team_size_min"] = int(team.group(1))
+        if team.group(2):
+            flags["team_size_max"] = int(team.group(2))
+        return flags, display
+
+    if _PROFESSIONALS_RE.search(low):
+        flags["professionals_only"] = True
+        return flags, display
+
+    if re.search(r"\bhigh school\b", low):
+        flags["high_school_only"] = True
+        flags["students_only"] = True
+        if low != "high school students only":
+            flags["partners_or_invite_only"] = True
+        return flags, display
+
+    if re.search(r"\bstudents only\b", low):
+        flags["students_only"] = True
+        if low not in _GENERIC_STUDENT_LINES:
+            flags["partners_or_invite_only"] = True
+        return flags, display
+
+    if re.search(r"\b(partners?|employees)\b", low) and "only" in low:
+        flags["partners_or_invite_only"] = True
+        return flags, display
+    if "invite only" in low or "invite-only" in low:
+        flags["partners_or_invite_only"] = True
+        return flags, display
+    if re.search(r"\bonly\b", low):
+        flags["partners_or_invite_only"] = True
+    return flags, display
+
+
+def _merge_eligibility(into: Dict[str, Any], flags: Dict[str, Any]) -> None:
+    for key in (
+        "students_only",
+        "high_school_only",
+        "professionals_only",
+        "partners_or_invite_only",
+        "team_required",
+        "country_limited",
+    ):
+        if flags.get(key):
+            into[key] = True
+    for key in ("team_size_min", "team_size_max"):
+        if flags.get(key) is not None:
+            into[key] = flags[key]
+    for name in flags.get("countries") or []:
+        if name not in into["countries"]:
+            into["countries"].append(name)
+
+
+def _li_text_and_tooltip(inner: str) -> Tuple[str, Optional[str]]:
+    tip = _TOOLTIP_RE.search(inner or "")
+    tooltip = html_module.unescape(tip.group(2)).strip() if tip else None
+    return _plain_text(inner), tooltip
+
+
+def parse_eligibility_page(html: str) -> Dict[str, Any]:
+    """Read a Devpost hackathon page into eligibility fields.
+
+    Missing sidebar -> eligibility_known False and every restriction flag
+    false, so the listing stays in the default view with no badge.
+    """
+    result = blank_eligibility()
+    listing = _element_inner_by_id(html or "", "eligibility-list")
+    if listing is None:
+        return result
+    result["eligibility_known"] = True
+    lines: List[str] = []
+    for inner in _LI_INNER_RE.findall(listing):
+        text, tooltip = _li_text_and_tooltip(inner)
+        if not text:
+            continue
+        flags, display = classify_eligibility_line(text, tooltip)
+        _merge_eligibility(result, flags)
+        if display:
+            lines.append(display)
+    result["eligibility_lines"] = lines
+
+    description_html = _element_inner_by_id(html, "challenge-description") or ""
+    requirements_html = _element_inner_by_id(html, "challenge-requirements") or ""
+    description = _plain_text(description_html)
+    requirements = _plain_text(requirements_html)
+    blob = f"{description} {requirements}".strip()
+    if _PARTNER_AUDIENCE_RE.search(description[:1500]):
+        result["partners_or_invite_only"] = True
+    if result["students_only"] and _HIGH_SCHOOL_AGE_RE.search(blob):
+        result["high_school_only"] = True
+    if text_needs_hardware(blob):
+        result["needs_hardware"] = True
+    return result
+
+
+def listing_is_limited(entry: Dict[str, Any]) -> bool:
+    """True when the default view should hide this listing.
+
+    Country limits and hardware needs are badged but still shown: the
+    default view hides a closed group or a required team only.
+    """
+    return bool(
+        entry.get("students_only")
+        or entry.get("high_school_only")
+        or entry.get("professionals_only")
+        or entry.get("partners_or_invite_only")
+        or entry.get("team_required")
+    )
+
+
+def eligibility_badge_labels(entry: Dict[str, Any]) -> List[str]:
+    """Short badge texts for one listing. Empty when nothing was found."""
+    labels: List[str] = []
+    if entry.get("high_school_only"):
+        labels.append("High school only")
+    elif entry.get("students_only"):
+        labels.append("Students only")
+    if entry.get("professionals_only") or entry.get("partners_or_invite_only"):
+        labels.append("Restricted")
+    if entry.get("team_required"):
+        minimum = entry.get("team_size_min")
+        if isinstance(minimum, int) and minimum > 0:
+            labels.append(f"Team required ({minimum}+)")
+        else:
+            labels.append("Team required")
+    if entry.get("country_limited"):
+        labels.append("Country-limited")
+    if entry.get("needs_hardware"):
+        labels.append("Needs hardware")
+    return labels
+
+
+def _badge_class(label: str) -> str:
+    if label.startswith("Team required"):
+        return "team"
+    return {
+        "Students only": "limit",
+        "High school only": "limit",
+        "Restricted": "restricted",
+        "Country-limited": "country",
+        "Needs hardware": "hardware",
+    }.get(label, "restricted")
+
+
+def fetch_text(url: str) -> str:
+    """GET a hackathon page as HTML.
+
+    Devpost's CDN serves a browser check to clients that ask for text/html
+    and a normal page to clients that send Accept: */*. Retries transient
+    failures. A browser-check page is a failure, not an empty eligibility list.
+    """
+    last_error: Optional[Exception] = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "*/*"})
+        try:
+            with urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+                text = response.read().decode("utf-8", "replace")
+            if "eligibility-list" not in text and "Just a moment" in text:
+                raise URLError("browser check page")
+            return text
+        except HTTPError as err:
+            last_error = err
+            if 400 <= err.code < 500 and err.code != 429:
+                raise
+        except (URLError, TimeoutError, OSError) as err:
+            last_error = err
+        if attempt < MAX_RETRIES:
+            time.sleep(RETRY_BACKOFF * attempt)
+    assert last_error is not None
+    raise last_error
+
+
+def attach_eligibility(
+    entries: List[Dict[str, Any]],
+    fetch_html: Callable[[str], str] = fetch_text,
+    delay: float = PAGE_DELAY,
+) -> Dict[str, int]:
+    """Fill eligibility fields on each entry from its Devpost page.
+
+    One short pause before every page, including the first, so this does not
+    run straight into the listing fetch. A page that fails is left unknown:
+    no badge, and the row stays in the default view. Returns counts.
+    """
+    known = 0
+    unknown = 0
+    for entry in entries:
+        if delay > 0:
+            time.sleep(delay)
+        url = entry.get("url") or ""
+        try:
+            if not url:
+                raise URLError("missing url")
+            parsed = parse_eligibility_page(fetch_html(url))
+        except Exception:  # noqa: BLE001 - one bad page must not drop the list
+            parsed = blank_eligibility()
+        if parsed.get("eligibility_known"):
+            known += 1
+        else:
+            unknown += 1
+        entry.update(parsed)
+    return {"eligibility_known": known, "eligibility_unknown": unknown}
+
+
 def build_entry(
     item: Dict[str, Any],
     now: Optional[datetime] = None,
@@ -602,6 +1025,11 @@ def _stats_with_shown(entries: List[Dict[str, Any]], stats: Dict[str, Any]) -> D
     online = sum(1 for entry in entries if entry.get("is_online"))
     out["online"] = online
     out["in_person"] = len(entries) - online
+    out["restricted_or_team"] = sum(1 for entry in entries if listing_is_limited(entry))
+    out["eligibility_known"] = sum(1 for entry in entries if entry.get("eligibility_known"))
+    out["eligibility_unknown"] = sum(
+        1 for entry in entries if "eligibility_known" in entry and not entry.get("eligibility_known")
+    )
     return out
 
 
@@ -610,23 +1038,45 @@ def coverage_summary(
     stats: Dict[str, Any],
     online: Optional[int] = None,
     in_person: Optional[int] = None,
+    restricted: int = 0,
 ) -> str:
-    """'24 online shown (7 in-person hidden, 19 skipped: ...)'."""
+    """'24 online shown (7 in-person hidden, 19 skipped: ...)'.
+
+    ``restricted`` is how many online rows the default view hides because
+    they are limited to a group or require a team. Those rows are not also
+    counted in ``in_person``. When it is zero the sentence stays the older
+    'online shown' wording.
+    """
     if online is None:
         online = shown
     if in_person is None:
         in_person = max(shown - online, 0)
+    if restricted < 0:
+        restricted = 0
+    open_online = online - restricted
+    if open_online < 0:
+        open_online = 0
     fetched = stats.get("fetched")
     if isinstance(fetched, int):
         skipped = fetched - shown
         if skipped < 0:
             skipped = 0
-        text = (
-            f"{online} online shown ({in_person} in-person hidden, "
-            f"{skipped} skipped: no cash prize or invite-only, or deadline passed)"
-        )
+        skip_note = f"{skipped} skipped: no cash prize or invite-only, or deadline passed"
+        if restricted:
+            text = (
+                f"{open_online} shown ({restricted} restricted or team-only hidden, "
+                f"{in_person} in-person hidden, {skip_note})"
+            )
+        else:
+            text = f"{online} online shown ({in_person} in-person hidden, {skip_note})"
     else:
-        text = f"{online} online shown ({in_person} in-person hidden)"
+        if restricted:
+            text = (
+                f"{open_online} shown ({restricted} restricted or team-only hidden, "
+                f"{in_person} in-person hidden)"
+            )
+        else:
+            text = f"{online} online shown ({in_person} in-person hidden)"
     if not stats.get("complete", True):
         text += " (partial fetch - a page failed, see hackathons.json)"
     return text
@@ -686,15 +1136,19 @@ PAGE_SCRIPT = """<script>
   function refresh() {
     var box = document.getElementById("show-in-person");
     var showInPerson = !!(box && box.checked);
+    var limitedBox = document.getElementById("show-restricted");
+    var showRestricted = !!(limitedBox && limitedBox.checked);
     var rows = document.querySelectorAll("tbody tr");
     var ended = 0;
     var onlineShown = 0;
     var inPersonShown = 0;
     var inPersonHidden = 0;
+    var restrictedHidden = 0;
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
       var iso = row.getAttribute("data-deadline");
       var online = row.getAttribute("data-online") !== "0";
+      var restricted = row.getAttribute("data-restricted") === "1";
       var past = false;
       if (iso) {
         var end = Date.parse(iso);
@@ -707,9 +1161,12 @@ PAGE_SCRIPT = """<script>
         ended += 1;
         continue;
       }
-      if (!online && !showInPerson) {
+      var hideInPerson = !online && !showInPerson;
+      var hideRestricted = restricted && !showRestricted;
+      if (hideInPerson || hideRestricted) {
         row.style.display = "none";
-        inPersonHidden += 1;
+        if (hideInPerson) inPersonHidden += 1;
+        else restrictedHidden += 1;
         continue;
       }
       row.style.display = "table-row";
@@ -727,16 +1184,25 @@ PAGE_SCRIPT = """<script>
     var skipped = el.getAttribute("data-skipped") || "0";
     var endedNote = ended ? "; " + ended + " ended since the last refresh" : "";
     var skipNote = skipped + " skipped: no cash prize or invite-only, or deadline passed";
+    var shown = onlineShown + inPersonShown;
     if (showInPerson) {
-      el.textContent = (onlineShown + inPersonShown) + " shown (" + onlineShown +
-        " online, " + inPersonShown + " in-person; " + skipNote + endedNote + ")";
+      var base = shown + " shown (" + onlineShown + " online, " + inPersonShown + " in-person";
+      if (restrictedHidden) base += "; " + restrictedHidden + " restricted or team-only hidden";
+      el.textContent = base + "; " + skipNote + endedNote + ")";
+    } else if (restrictedHidden) {
+      el.textContent = onlineShown + " shown (" + restrictedHidden +
+        " restricted or team-only hidden, " + inPersonHidden +
+        " in-person hidden, " + skipNote + endedNote + ")";
     } else {
       el.textContent = onlineShown + " online shown (" + inPersonHidden +
         " in-person hidden, " + skipNote + endedNote + ")";
     }
   }
-  var toggle = document.getElementById("show-in-person");
-  if (toggle) toggle.addEventListener("change", refresh);
+  var toggles = ["show-in-person", "show-restricted"];
+  for (var t = 0; t < toggles.length; t++) {
+    var toggle = document.getElementById(toggles[t]);
+    if (toggle) toggle.addEventListener("change", refresh);
+  }
   refresh();
   setInterval(refresh, 60000);
 })();
@@ -751,7 +1217,8 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
     online_rank = 0
     for e in entries:
         where = "Online" if e["is_online"] else _esc(e["location"] or "See site")
-        if e["is_online"]:
+        limited = listing_is_limited(e)
+        if e["is_online"] and not limited:
             online_rank += 1
             rank_cell = str(online_rank)
         else:
@@ -764,6 +1231,10 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
         elif not e["currency_known"]:
             usd_note = "<div class='sub'>currency not converted</div>"
         badges = ""
+        for label in eligibility_badge_labels(e):
+            badges += (
+                f"<div><span class='badge {_badge_class(label)}'>{_esc(label)}</span></div>"
+            )
         if e.get("currency_needs_review"):
             badges += "<div><span class='badge verify'>verify currency</span></div>"
         if e.get("includes_non_cash_prizes"):
@@ -779,8 +1250,9 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
             time_cell = _esc(e.get("time_left_to_submission") or "-")
             deadline_attr = ""
         online_attr = "1" if e["is_online"] else "0"
+        restricted_attr = "1" if limited else "0"
         rows.append(
-            f"<tr{deadline_attr} data-online='{online_attr}'>"
+            f"<tr{deadline_attr} data-online='{online_attr}' data-restricted='{restricted_attr}'>"
             f"<td class='rank'>{rank_cell}</td>"
             f"<td class='title'><a href='{_esc(e['url'])}' target='_blank' rel='noopener noreferrer'>{_esc(e['title'])}</a>"
             f"{badges}"
@@ -800,7 +1272,12 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
     skipped = fetched - shown if isinstance(fetched, int) else 0
     if skipped < 0:
         skipped = 0
-    coverage = coverage_summary(shown, stats, online=online_count, in_person=in_person_count)
+    restricted_online = sum(
+        1 for e in entries if e.get("is_online") and listing_is_limited(e)
+    )
+    coverage = coverage_summary(
+        shown, stats, online=online_count, in_person=in_person_count, restricted=restricted_online
+    )
 
     html_doc = f"""<!DOCTYPE html>
 <html lang="en">
@@ -829,9 +1306,14 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
            padding: .05rem .4rem; border-radius: 999px; color: #1a1a1a; }}
   .badge.verify {{ background: #f5c518; }}
   .badge.noncash {{ background: #c9ddff; }}
-  .toggle {{ display: flex; align-items: center; gap: .5rem; margin: 1rem 0 0; font-weight: 600; }}
+  .badge.limit {{ background: #f3b4c8; }}
+  .badge.team {{ background: #b7e4c7; }}
+  .badge.restricted {{ background: #f6c59a; }}
+  .badge.country {{ background: #d7c6f5; }}
+  .badge.hardware {{ background: #f3dd9a; }}
+  .toggle {{ display: flex; align-items: center; gap: .5rem; margin: .6rem 0 0; font-weight: 600; }}
   .toggle input {{ width: 1.15rem; height: 1.15rem; }}
-  tr[data-online="0"] {{ display: none; }}
+  tr[data-online="0"], tr[data-restricted="1"] {{ display: none; }}
   a {{ color: #0969da; }}
   @media (prefers-color-scheme: dark) {{ a {{ color: #4da3ff; }} }}
   footer {{ margin-top: 1.5rem; font-size: .8rem; color: #888; }}
@@ -843,12 +1325,14 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
 (fewer registrants &rarr; higher on the list). Non-dollar prizes are converted to
 approximate US dollars for ranking (rough rates from {_esc(FX_RATES_DATE)}).
 Rows marked verify currency are ranked lower. Time left is counted in your browser
-from the submission deadline. Online hackathons are shown first; tick the box
-to include in-person events. Updated {_esc(UPDATE_CADENCE)}.</p>
+from the submission deadline. Online hackathons open to one person are shown
+first. Tick the boxes to include in-person events, or listings limited to a
+group or a required team. Updated {_esc(UPDATE_CADENCE)}.</p>
 <p class="updated">Last updated: <time datetime="{_esc(updated)}">{_esc(updated)}</time>
  &middot; <span id="coverage-text" data-shown="{shown}" data-online="{online_count}" data-in-person="{in_person_count}" data-skipped="{skipped}">{_esc(coverage)}</span></p>
 
 <label class="toggle"><input type="checkbox" id="show-in-person"> Show in-person events too</label>
+<label class="toggle"><input type="checkbox" id="show-restricted"> Show restricted / team-only</label>
 
 <div class="note">
 <strong>Read this before picking one &ndash; honest limits</strong>
@@ -893,9 +1377,18 @@ def print_report(entries: List[Dict[str, Any]], stats: Dict[str, Any], top: int)
     if not stats.get("complete", True) and stats.get("error"):
         print(f"  fetch error: {stats['error']}")
     online_count = sum(1 for e in entries if e.get("is_online"))
+    restricted_online = sum(1 for e in entries if e.get("is_online") and listing_is_limited(e))
     print(coverage_summary(
-        len(entries), stats, online=online_count, in_person=len(entries) - online_count
+        len(entries), stats,
+        online=online_count,
+        in_person=len(entries) - online_count,
+        restricted=restricted_online,
     ) + ".")
+    if "eligibility_known" in stats:
+        print(
+            f"Eligibility read for {stats.get('eligibility_known', 0)} of {len(entries)} "
+            f"listings ({stats.get('eligibility_unknown', 0)} unknown, left visible)."
+        )
     print(
         "Ranked by approx. USD prize per registrant. "
         "Rows marked verify currency are listed after the others."
@@ -921,6 +1414,7 @@ def print_report(entries: List[Dict[str, Any]], stats: Dict[str, Any], top: int)
             flags.append("verify currency")
         if e.get("includes_non_cash_prizes"):
             flags.append("non-cash")
+        flags.extend(eligibility_badge_labels(e))
         suffix = f"  [{', '.join(flags)}]" if flags else ""
         print(
             f"{i:>3}  {e['prize_display']:>12}  {usd:>10}  {e['registrations_count']:>6}  "
@@ -941,11 +1435,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--out-dir", type=Path, default=Path("docs"),
                         help="output directory for index.html and hackathons.json (default: docs)")
     parser.add_argument("--delay", type=float, default=PAGE_DELAY,
-                        help=f"seconds to sleep between page fetches (default: {PAGE_DELAY})")
+                        help=f"seconds to sleep between listing pages and between each "
+                             f"hackathon page (default: {PAGE_DELAY})")
     args = parser.parse_args(argv)
 
     items, stats = load_pages(delay=args.delay)
     entries = build_entries(items)
+    stats.update(attach_eligibility(entries, delay=args.delay))
 
     write_json_doc(entries, stats, args.out_dir / "hackathons.json")
     write_html_doc(entries, stats, args.out_dir / "index.html")

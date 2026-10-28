@@ -20,6 +20,9 @@ sits at the top; a $100k prize with 30,000 registrants sinks to the bottom.
    `https://devpost.com/api/hackathons?status[]=open` politely
    (identifying User-Agent, short delay between pages, retries with backoff),
    and reports how many hackathons it got versus `meta.total_count`.
+   Then opens each kept hackathon page, with the same delay, and reads the
+   **Who can participate** sidebar. A page that cannot be read leaves that
+   row visible with no eligibility badge.
 2. Keeps only hackathons that are:
    - open (`open_state` is `open`),
    - still before the submission end date (Devpost's
@@ -45,16 +48,25 @@ sits at the top; a $100k prize with 30,000 registrants sinks to the bottom.
    The listed amount and the normal exchange-rate conversion are still stored.
 5. Marks **includes non-cash prizes** when the prize text mentions credits,
    bitcoin/BTC/crypto/tokens, subscriptions, swag, or goodies.
-6. Ranks by approximate USD prize per registrant and writes:
+6. Records who can enter, when the sidebar says so: students only, high
+   school only, a required team (and its minimum size), professionals,
+   partners or another closed group, a country list tighter than Devpost's
+   usual sanctions exceptions, and a clear hardware requirement (a physical
+   robot, microcontroller, or similar). These are new fields on each
+   hackathon in `hackathons.json`. They do not change the older fields.
+7. Ranks by approximate USD prize per registrant and writes:
    - `docs/index.html` — a simple, mobile-friendly table with links,
    - `docs/hackathons.json` — the same data, machine-readable,
    - both stamped with a "last updated" UTC time.
 
 The table shows the prize as listed (plus "≈ $…" for non-dollar prizes),
 number of registrants, approximate USD per registrant, the submission
-deadline, and whether the hackathon is online. Time left is counted in the
-browser from that deadline, and a row hides itself once the deadline has
-passed. The header says how many rows are shown and how many were skipped.
+deadline, and whether the hackathon is online. Cards also show badges such
+as **Students only**, **High school only**, **Team required (2+)**,
+**Restricted**, **Country-limited**, and **Needs hardware** when those
+apply. Time left is counted in the browser from that deadline, and a row
+hides itself once the deadline has passed. The header says how many rows
+are shown and how many were skipped.
 `hackathons.json` keeps the original amount and currency next to
 `prize_usd_approx` and `usd_per_registrant_approx`, plus
 `submission_deadline_utc`, and records the rate table and its date.
@@ -71,8 +83,9 @@ python3 hackathons.py            # fetch live data, write docs/, print top 10
 python3 hackathons.py --top 20   # print a longer console table
 ```
 
-It takes about 10 seconds (it waits 1.5 s between Devpost pages to be
-polite). Note that it **overwrites** `docs/index.html` and
+It takes a couple of minutes (it waits 1.5 s between Devpost listing pages,
+and again before each hackathon page, to be polite). Note that it
+**overwrites** `docs/index.html` and
 `docs/hackathons.json` in your copy of the repo. To try it without touching
 `docs/`, write somewhere else:
 
@@ -86,10 +99,15 @@ Other options: `--delay SECONDS` (pause between pages) and `--help`.
 
 Open the [live page](https://mzee04.github.io/small-hackathon-finder/) (or
 your generated `index.html`). The best odds are at the top. Only online
-hackathons are listed until you tick **Show in-person events too**. An
-event Devpost marks as online, including one that only lists a host city,
-shows as Online. Click a title to open that hackathon on Devpost, then read
-its rules before entering.
+hackathons are listed until you tick **Show in-person events too**. Listings
+limited to students, high school, professionals, partners, or a required
+team are hidden until you tick **Show restricted / team-only**. Solo-friendly
+listings that are open to anyone stay in the default view. A country limit
+or a hardware need is badged and still shown. If eligibility could not be
+read, there is no badge and the row stays visible. An event Devpost marks
+as online, including one that only lists a host city, shows as Online.
+Click a title to open that hackathon on Devpost, then read its rules before
+entering.
 For scripts, use [`hackathons.json`](https://mzee04.github.io/small-hackathon-finder/hackathons.json).
 
 ## Run the tests
@@ -136,9 +154,13 @@ from a branch → `main` / `docs` if it is not already on).
 - **Deadlines are dates.** Devpost's listing gives a submission end date,
   not a clock time. This tool treats that as the end of the UTC day. The
   page counts down from it and hides the row when the moment has passed.
-- **Check the rules.** Always read each hackathon's rules page for
-  eligibility, team size, residency restrictions and exact prize conditions
-  before entering.
+- **Eligibility is the sidebar, not the full rules.** Badges come from
+  Devpost's "Who can participate" list, plus an obvious hardware line when
+  the page requires a physical robot or similar. Devpost's usual sanctions
+  exceptions are not marked country-limited. A page that fails to load is
+  left visible with no badge. Always read the rules before entering:
+  eligibility, team size, residency, and exact prize conditions can still
+  be stricter than the sidebar.
 
 ## License
 

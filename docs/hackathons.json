@@ -1,5 +1,5 @@
 {
-  "last_updated_utc": "2026-10-27T22:45:14Z",
+  "last_updated_utc": "2026-10-28T01:17:52Z",
   "source": "https://devpost.com/api/hackathons?status[]=open",
   "ranking": "approximate USD prize / registrations_count (registrations are not submissions); listings flagged verify-currency are ranked after the others using a conservative INR reading; unknown currencies listed last",
   "fx_rates": {
@@ -32,16 +32,19 @@
       "KES": 130.0
     }
   },
-  "note": "Honest limits: this list only covers hackathons listed on Devpost. Registration counts are not submissions - most registered teams never submit, so real odds are usually better than the numbers suggest, but the ratio is only a heuristic, not a prediction. Prize amounts are self-reported by organisers and are not verified, and may be split across many tracks or teams. Amounts are shown as listed and converted to approximate US dollars with hard-coded exchange rates (taken 2026-10-26, not live); that dollar figure is used for ranking and shown next to non-dollar prizes. Listings flagged 'verify currency' look like rupees mislabeled as dollars (Indian-style digit grouping such as 1,55,000, or a very large dollar prize at a college or university with very few registrants). Those rows are ranked below the others, using a conservative rupee value. A currency with no known rate is listed after every converted prize. Prize text that mentions credits, bitcoin, crypto, tokens, subscriptions, swag, or goodies is marked 'includes non-cash prizes'. The countdown uses the submission end date (through the end of that UTC day), and a row disappears once that moment has passed. Always read each hackathon's rules page for eligibility, team-size limits and exact prize conditions before entering.",
+  "note": "Honest limits: this list only covers hackathons listed on Devpost. Registration counts are not submissions - most registered teams never submit, so real odds are usually better than the numbers suggest, but the ratio is only a heuristic, not a prediction. Prize amounts are self-reported by organisers and are not verified, and may be split across many tracks or teams. Amounts are shown as listed and converted to approximate US dollars with hard-coded exchange rates (taken 2026-10-26, not live); that dollar figure is used for ranking and shown next to non-dollar prizes. Listings flagged 'verify currency' look like rupees mislabeled as dollars (Indian-style digit grouping such as 1,55,000, or a very large dollar prize at a college or university with very few registrants). Those rows are ranked below the others, using a conservative rupee value. A currency with no known rate is listed after every converted prize. Prize text that mentions credits, bitcoin, crypto, tokens, subscriptions, swag, or goodies is marked 'includes non-cash prizes'. The countdown uses the submission end date (through the end of that UTC day), and a row disappears once that moment has passed. Always read each hackathon's rules page for eligibility, team-size limits and exact prize conditions before entering. Who can participate is read from each hackathon page. Listings limited to students, high school, professionals, partners, or a required team are hidden until you ask to see them. A country list that is tighter than Devpost's usual sanctions exceptions is marked country-limited, and a page that clearly requires a physical robot or other hardware is marked too. Neither of those hides the row. If that sidebar cannot be read, the row stays visible with no eligibility badge.",
   "stats": {
     "total_count": 50,
     "fetched": 50,
     "pages_fetched": 6,
     "complete": true,
-    "shown": 31,
-    "skipped": 19,
-    "online": 27,
-    "in_person": 4
+    "eligibility_known": 32,
+    "eligibility_unknown": 0,
+    "shown": 32,
+    "skipped": 18,
+    "online": 28,
+    "in_person": 4,
+    "restricted_or_team": 19
   },
   "hackathons": [
     {
@@ -51,12 +54,12 @@
       "prize_currency": "$",
       "prize_display": "$120,000",
       "cash_prizes": 7,
-      "registrations_count": 109,
-      "prize_per_registrant": 1100.92,
+      "registrations_count": 129,
+      "prize_per_registrant": 930.23,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 120000.0,
-      "usd_per_registrant_approx": 1100.92,
+      "usd_per_registrant_approx": 930.23,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -72,7 +75,22 @@
         "Enterprise",
         "Productivity"
       ],
-      "organization_name": "Atlassian"
+      "organization_name": "Atlassian",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Specific countries/territories excluded"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Meta VR Start Developer Competition 2026",
@@ -80,13 +98,13 @@
       "prize_amount": 1000000.0,
       "prize_currency": "$",
       "prize_display": "$1,000,000",
-      "cash_prizes": 19,
-      "registrations_count": 4255,
-      "prize_per_registrant": 235.02,
+      "cash_prizes": 1,
+      "registrations_count": 4265,
+      "prize_per_registrant": 234.47,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 1000000.0,
-      "usd_per_registrant_approx": 235.02,
+      "usd_per_registrant_approx": 234.47,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -102,7 +120,67 @@
         "Machine Learning/AI",
         "Web"
       ],
-      "organization_name": "Meta"
+      "organization_name": "Meta",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Specific countries/territories excluded"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
+    },
+    {
+      "title": "LancerHacks",
+      "url": "https://lancerhacks2026.devpost.com/",
+      "prize_amount": 600.0,
+      "prize_currency": "$",
+      "prize_display": "$600",
+      "cash_prizes": 3,
+      "registrations_count": 4,
+      "prize_per_registrant": 150.0,
+      "prize_currency_code": "USD",
+      "currency_known": true,
+      "prize_usd_approx": 600.0,
+      "usd_per_registrant_approx": 150.0,
+      "currency_needs_review": false,
+      "currency_review_reasons": [],
+      "includes_non_cash_prizes": false,
+      "time_left_to_submission": "3 days left",
+      "submission_period_dates": "Oct 27 - 30, 2026",
+      "submission_deadline_utc": "2026-10-30T23:59:59Z",
+      "submission_deadline_display": "Oct 30, 2026",
+      "location": "Online",
+      "location_icon": "globe",
+      "is_online": true,
+      "themes": [
+        "Beginner Friendly"
+      ],
+      "organization_name": "pasadena city college",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "College students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Health Hackathon 3.0",
@@ -130,7 +208,22 @@
       "themes": [
         "Health"
       ],
-      "organization_name": "VIT Bhopal University"
+      "organization_name": "VIT Bhopal University",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Ages 18+ only",
+        "Only specific countries/territories included"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": true,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "DATANOVA 2026 GLOBAL DATA-THON",
@@ -160,7 +253,25 @@
         "Fintech",
         "Health"
       ],
-      "organization_name": "DataNova"
+      "organization_name": "DataNova",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Team required",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": true,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "UGREEN Hackathon 2026 on AI NAS",
@@ -169,12 +280,12 @@
       "prize_currency": "$",
       "prize_display": "$46,000",
       "cash_prizes": 4,
-      "registrations_count": 588,
-      "prize_per_registrant": 78.23,
+      "registrations_count": 594,
+      "prize_per_registrant": 77.44,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 46000.0,
-      "usd_per_registrant_approx": 78.23,
+      "usd_per_registrant_approx": 77.44,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -190,7 +301,23 @@
         "Machine Learning/AI",
         "Productivity"
       ],
-      "organization_name": "UGREEN"
+      "organization_name": "UGREEN",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Companies/professional organizations excluded from participation",
+        "Specific countries/territories excluded"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "HackWithAditya",
@@ -220,7 +347,27 @@
         "Health",
         "Machine Learning/AI"
       ],
-      "organization_name": "Aditya University"
+      "organization_name": "Aditya University",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Team required: 4 to 6 members",
+        "Companies/professional organizations excluded from participation",
+        "Only specific countries/territories included: India"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": true,
+      "team_size_min": 4,
+      "team_size_max": 6,
+      "country_limited": true,
+      "countries": [
+        "India"
+      ],
+      "needs_hardware": false
     },
     {
       "title": "AWS Communication Developer Services (CDS) Agentic AI Partner Hackathon",
@@ -229,16 +376,16 @@
       "prize_currency": "$",
       "prize_display": "$40,000",
       "cash_prizes": 4,
-      "registrations_count": 1072,
-      "prize_per_registrant": 37.31,
+      "registrations_count": 1073,
+      "prize_per_registrant": 37.28,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 40000.0,
-      "usd_per_registrant_approx": 37.31,
+      "usd_per_registrant_approx": 37.28,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
-      "time_left_to_submission": "about 21 hours left",
+      "time_left_to_submission": "about 19 hours left",
       "submission_period_dates": "Sep 14 - Oct 28, 2026",
       "submission_deadline_utc": "2026-10-28T23:59:59Z",
       "submission_deadline_display": "Oct 28, 2026",
@@ -250,7 +397,23 @@
         "Mobile",
         "Machine Learning/AI"
       ],
-      "organization_name": "AWS"
+      "organization_name": "AWS",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Professionals/Post grads only",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": true,
+      "partners_or_invite_only": true,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Herhack",
@@ -280,7 +443,25 @@
         "Blockchain",
         "Open Ended"
       ],
-      "organization_name": "Echelon institute of technology"
+      "organization_name": "Echelon institute of technology",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Ages 17+ only",
+        "Students only",
+        "Team required: 2 to 5 members",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": true,
+      "team_size_min": 2,
+      "team_size_max": 5,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "RenderJuice Blender Animation & Programmatic Rendering Contest",
@@ -310,7 +491,22 @@
         "Music/Art",
         "Open Ended"
       ],
-      "organization_name": "RenderJuice"
+      "organization_name": "RenderJuice",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Ages 18+ only",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Hybrid Micro Mouse Challenge ",
@@ -340,7 +536,27 @@
         "IoT",
         "Open Ended"
       ],
-      "organization_name": "Alliance University"
+      "organization_name": "Alliance University",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Ages 13+ only",
+        "Students only",
+        "Team required: 2 to 5 members",
+        "Companies/professional organizations excluded from participation",
+        "Only specific countries/territories included: India"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": true,
+      "team_size_min": 2,
+      "team_size_max": 5,
+      "country_limited": true,
+      "countries": [
+        "India"
+      ],
+      "needs_hardware": true
     },
     {
       "title": "Codex x TwitchCon Hackathon",
@@ -348,13 +564,13 @@
       "prize_amount": 25000.0,
       "prize_currency": "$",
       "prize_display": "$25,000",
-      "cash_prizes": 4,
-      "registrations_count": 1349,
-      "prize_per_registrant": 18.53,
+      "cash_prizes": 1,
+      "registrations_count": 1369,
+      "prize_per_registrant": 18.26,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 25000.0,
-      "usd_per_registrant_approx": 18.53,
+      "usd_per_registrant_approx": 18.26,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -370,7 +586,23 @@
         "Gaming",
         "Machine Learning/AI"
       ],
-      "organization_name": "Twitch"
+      "organization_name": "Twitch",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Dakar Bitcoin Hack by BTrust",
@@ -379,12 +611,12 @@
       "prize_currency": "$",
       "prize_display": "$900",
       "cash_prizes": 3,
-      "registrations_count": 50,
-      "prize_per_registrant": 18.0,
+      "registrations_count": 52,
+      "prize_per_registrant": 17.31,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 900.0,
-      "usd_per_registrant_approx": 18.0,
+      "usd_per_registrant_approx": 17.31,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -400,7 +632,24 @@
         "Fintech",
         "Machine Learning/AI"
       ],
-      "organization_name": "Dakar Bitcoin Days"
+      "organization_name": "Dakar Bitcoin Days",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Arbiter Hacks V1",
@@ -409,12 +658,12 @@
       "prize_currency": "$",
       "prize_display": "$7,800",
       "cash_prizes": 5,
-      "registrations_count": 635,
-      "prize_per_registrant": 12.28,
+      "registrations_count": 636,
+      "prize_per_registrant": 12.26,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 7800.0,
-      "usd_per_registrant_approx": 12.28,
+      "usd_per_registrant_approx": 12.26,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -430,7 +679,24 @@
         "Machine Learning/AI",
         "Open Ended"
       ],
-      "organization_name": "Arbiter "
+      "organization_name": "Arbiter ",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Ages 13+ only",
+        "Students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "HackFW: MADE Challenge",
@@ -460,7 +726,22 @@
         "Machine Learning/AI",
         "Robotic Process Automation"
       ],
-      "organization_name": "Fort Worth DAO"
+      "organization_name": "Fort Worth DAO",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Qloo Agentic Hackathon",
@@ -468,13 +749,13 @@
       "prize_amount": 25000.0,
       "prize_currency": "$",
       "prize_display": "$25,000",
-      "cash_prizes": 3,
-      "registrations_count": 2629,
-      "prize_per_registrant": 9.51,
+      "cash_prizes": 1,
+      "registrations_count": 2632,
+      "prize_per_registrant": 9.5,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 25000.0,
-      "usd_per_registrant_approx": 9.51,
+      "usd_per_registrant_approx": 9.5,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -488,7 +769,22 @@
       "themes": [
         "Machine Learning/AI"
       ],
-      "organization_name": "Qloo"
+      "organization_name": "Qloo",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "FUSE Society Blueprint 2026",
@@ -516,7 +812,24 @@
       "themes": [
         "Beginner Friendly"
       ],
-      "organization_name": "Fuse Society"
+      "organization_name": "Fuse Society",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Ages 14 to 18 only",
+        "High school students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": true,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "YouCam API Skin AI & eCommerce VTO Hackathon",
@@ -524,8 +837,8 @@
       "prize_amount": 6000.0,
       "prize_currency": "$",
       "prize_display": "$6,000",
-      "cash_prizes": 5,
-      "registrations_count": 1360,
+      "cash_prizes": 1,
+      "registrations_count": 1362,
       "prize_per_registrant": 4.41,
       "prize_currency_code": "USD",
       "currency_known": true,
@@ -546,7 +859,22 @@
         "E-commerce/Retail",
         "Machine Learning/AI"
       ],
-      "organization_name": "Perfect Corp"
+      "organization_name": "Perfect Corp",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Specific countries/territories excluded"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "PayPal AI Hackathon",
@@ -554,8 +882,8 @@
       "prize_amount": 67500.0,
       "prize_currency": "$",
       "prize_display": "$67,500",
-      "cash_prizes": 14,
-      "registrations_count": 22843,
+      "cash_prizes": 1,
+      "registrations_count": 22868,
       "prize_per_registrant": 2.95,
       "prize_currency_code": "USD",
       "currency_known": true,
@@ -576,7 +904,22 @@
         "Machine Learning/AI",
         "Web"
       ],
-      "organization_name": "PayPal"
+      "organization_name": "PayPal",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Learn AR with SPECS",
@@ -585,12 +928,12 @@
       "prize_currency": "$",
       "prize_display": "$2,500",
       "cash_prizes": 3,
-      "registrations_count": 865,
-      "prize_per_registrant": 2.89,
+      "registrations_count": 867,
+      "prize_per_registrant": 2.88,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 2500.0,
-      "usd_per_registrant_approx": 2.89,
+      "usd_per_registrant_approx": 2.88,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -606,7 +949,22 @@
         "Machine Learning/AI",
         "Design"
       ],
-      "organization_name": "Devpost"
+      "organization_name": "Devpost",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "AccessED Hacks",
@@ -636,7 +994,24 @@
         "Education",
         "Social Good"
       ],
-      "organization_name": "AccessEDnpo"
+      "organization_name": "AccessEDnpo",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "MineArena 1.0",
@@ -645,12 +1020,12 @@
       "prize_currency": "₹",
       "prize_display": "₹ 75,000",
       "cash_prizes": 5,
-      "registrations_count": 398,
-      "prize_per_registrant": 188.44,
+      "registrations_count": 399,
+      "prize_per_registrant": 187.97,
       "prize_currency_code": "INR",
       "currency_known": true,
       "prize_usd_approx": 787.82,
-      "usd_per_registrant_approx": 1.98,
+      "usd_per_registrant_approx": 1.97,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -666,7 +1041,24 @@
         "Fintech",
         "Health"
       ],
-      "organization_name": "Code commit"
+      "organization_name": "Code commit",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "College students only",
+        "Team required: 2 to 4 members",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": true,
+      "team_size_min": 2,
+      "team_size_max": 4,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Nebius x NVIDIA Global AI Hackathon",
@@ -675,7 +1067,7 @@
       "prize_currency": "$",
       "prize_display": "$50,000",
       "cash_prizes": 6,
-      "registrations_count": 28377,
+      "registrations_count": 28390,
       "prize_per_registrant": 1.76,
       "prize_currency_code": "USD",
       "currency_known": true,
@@ -696,7 +1088,22 @@
         "Beginner Friendly",
         "Robotic Process Automation"
       ],
-      "organization_name": "nebius"
+      "organization_name": "nebius",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "SafeSpace Hacks",
@@ -726,7 +1133,24 @@
         "Cybersecurity",
         "Social Good"
       ],
-      "organization_name": "SafeSpace"
+      "organization_name": "SafeSpace",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Green Shift Hacks",
@@ -735,12 +1159,12 @@
       "prize_currency": "$",
       "prize_display": "$125",
       "cash_prizes": 1,
-      "registrations_count": 84,
-      "prize_per_registrant": 1.49,
+      "registrations_count": 86,
+      "prize_per_registrant": 1.45,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 125.0,
-      "usd_per_registrant_approx": 1.49,
+      "usd_per_registrant_approx": 1.45,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -755,7 +1179,24 @@
         "Beginner Friendly",
         "Social Good"
       ],
-      "organization_name": "HackathonForEveryone"
+      "organization_name": "HackathonForEveryone",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "LaunchPad Hacks",
@@ -764,12 +1205,12 @@
       "prize_currency": "$",
       "prize_display": "$300",
       "cash_prizes": 1,
-      "registrations_count": 226,
-      "prize_per_registrant": 1.33,
+      "registrations_count": 227,
+      "prize_per_registrant": 1.32,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 300.0,
-      "usd_per_registrant_approx": 1.33,
+      "usd_per_registrant_approx": 1.32,
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
@@ -784,7 +1225,24 @@
         "Beginner Friendly",
         "Open Ended"
       ],
-      "organization_name": "Hack4TodayOrg"
+      "organization_name": "Hack4TodayOrg",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "CodeSprint by Elite Coders",
@@ -814,7 +1272,25 @@
         "Open Ended",
         "Web"
       ],
-      "organization_name": "elite coders"
+      "organization_name": "elite coders",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Team required: 2 to 5 members",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": true,
+      "team_size_min": 2,
+      "team_size_max": 5,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Girls Who Code HHS Hackathon 2026",
@@ -832,10 +1308,10 @@
       "currency_needs_review": false,
       "currency_review_reasons": [],
       "includes_non_cash_prizes": false,
-      "time_left_to_submission": "1 day left",
-      "submission_period_dates": "Oct 15 - 29, 2026",
-      "submission_deadline_utc": "2026-10-29T23:59:59Z",
-      "submission_deadline_display": "Oct 29, 2026",
+      "time_left_to_submission": "8 days left",
+      "submission_period_dates": "Oct 15 - Nov 05, 2026",
+      "submission_deadline_utc": "2026-11-05T23:59:59Z",
+      "submission_deadline_display": "Nov 5, 2026",
       "location": "Online",
       "location_icon": "globe",
       "is_online": true,
@@ -844,7 +1320,24 @@
         "Gaming",
         "Social Good"
       ],
-      "organization_name": "Girls Who Code HHS"
+      "organization_name": "Girls Who Code HHS",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Ages 14 to 18 only",
+        "Students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": true,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "AQX Sports Analytics Data Bowl 4.0",
@@ -874,7 +1367,24 @@
         "Databases",
         "Gaming"
       ],
-      "organization_name": "Devpost"
+      "organization_name": "Devpost",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Next Byte Hacks V5",
@@ -883,7 +1393,7 @@
       "prize_currency": "$",
       "prize_display": "$100",
       "cash_prizes": 3,
-      "registrations_count": 440,
+      "registrations_count": 439,
       "prize_per_registrant": 0.23,
       "prize_currency_code": "USD",
       "currency_known": true,
@@ -904,7 +1414,24 @@
         "Low/No Code",
         "Open Ended"
       ],
-      "organization_name": "Next Byte Hacks"
+      "organization_name": "Next Byte Hacks",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "Pumpkin Playground",
@@ -934,7 +1461,24 @@
         "Gaming",
         "Web"
       ],
-      "organization_name": "ACM Long Beach"
+      "organization_name": "ACM Long Beach",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "College students only",
+        "Companies/professional organizations excluded from participation",
+        "All countries/territories, excluding standard exceptions"
+      ],
+      "students_only": true,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": false,
+      "countries": [],
+      "needs_hardware": false
     },
     {
       "title": "SUSTAIN-A-THON 2.0",
@@ -943,18 +1487,18 @@
       "prize_currency": "$",
       "prize_display": "$150,000",
       "cash_prizes": 1,
-      "registrations_count": 47,
-      "prize_per_registrant": 3191.49,
+      "registrations_count": 48,
+      "prize_per_registrant": 3125.0,
       "prize_currency_code": "USD",
       "currency_known": true,
       "prize_usd_approx": 150000.0,
-      "usd_per_registrant_approx": 3191.49,
+      "usd_per_registrant_approx": 3125.0,
       "currency_needs_review": true,
       "currency_review_reasons": [
         "large_college_prize"
       ],
       "includes_non_cash_prizes": false,
-      "time_left_to_submission": "about 13 hours left",
+      "time_left_to_submission": "about 11 hours left",
       "submission_period_dates": "Oct 27 - 28, 2026",
       "submission_deadline_utc": "2026-10-28T23:59:59Z",
       "submission_deadline_display": "Oct 28, 2026",
@@ -966,7 +1510,24 @@
         "Cybersecurity",
         "IoT"
       ],
-      "organization_name": "Sharda University Greater Noida"
+      "organization_name": "Sharda University Greater Noida",
+      "eligibility_known": true,
+      "eligibility_lines": [
+        "Above legal age of majority in country of residence",
+        "Only specific countries/territories included: India"
+      ],
+      "students_only": false,
+      "high_school_only": false,
+      "professionals_only": false,
+      "partners_or_invite_only": false,
+      "team_required": false,
+      "team_size_min": null,
+      "team_size_max": null,
+      "country_limited": true,
+      "countries": [
+        "India"
+      ],
+      "needs_hardware": false
     }
   ]
 }
