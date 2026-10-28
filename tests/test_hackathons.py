@@ -807,6 +807,7 @@ class TestPageCopy:
         assert 'cron: "0 6 * * *"' in workflow
         assert 'cron: "0 18 * * *"' in workflow
         assert "Show in-person events too" in readme
+        assert "Show restricted / team-only" in readme
 
 
 class TestOnlineClassification:
@@ -870,3 +871,306 @@ class TestOnlineClassification:
         assert "data-online='0'" in html and "📍 VIT Bhopal University" in html
         assert "1 online shown (1 in-person hidden, 0 skipped:" in html
         assert "showInPerson" in html
+
+
+def _elig_page(items, description="", requirements=""):
+    """Minimal Devpost page: sidebar lines plus optional description HTML."""
+    lis = "".join(items)
+    return (
+        f'<ul id="eligibility-list" class="no-bullet">{lis}</ul>'
+        f'<article id="challenge-description">{description}</article>'
+        f'<div id="challenge-requirements">{requirements}</div>'
+    )
+
+
+class TestEligibilityParsing:
+    def test_open_adult_listing_has_no_badges_and_stays_visible(self):
+        html = _elig_page([
+            "<li>Above legal age of majority in country of residence</li>",
+            "<li>Companies/professional organizations excluded from participation</li>",
+            "<li>All countries/territories, excluding "
+            '<span data-tooltip title="Brazil, Crimea, Cuba, Iran, North Korea, Quebec, Russia">'
+            "standard exceptions</span></li>",
+        ])
+        parsed = hackathons.parse_eligibility_page(html)
+        assert parsed["eligibility_known"] is True
+        assert hackathons.listing_is_limited(parsed) is False
+        assert hackathons.eligibility_badge_labels(parsed) == []
+        assert parsed["country_limited"] is False
+        assert parsed["professionals_only"] is False
+
+    def test_students_team_country_and_hardware(self):
+        # Hybrid Micro Mouse Challenge, from its live sidebar and requirements.
+        html = _elig_page(
+            [
+                "<li>Ages 13+ only</li>",
+                "<li>Students only</li>",
+                "<li>Team required: 2 to 5 members</li>",
+                "<li>Companies/professional organizations excluded from participation</li>",
+                "<li>Only specific "
+                '<span data-tooltip title="India" class="has-tip">countries/territories included</span>'
+                "</li>",
+            ],
+            requirements=(
+                "<p>Build or configure one autonomous robot capable of completing the course.</p>"
+                "<p>Controller: Arduino, ESP32, or a similar microcontroller.</p>"
+            ),
+        )
+        parsed = hackathons.parse_eligibility_page(html)
+        assert parsed["students_only"] is True
+        assert parsed["high_school_only"] is False
+        assert parsed["team_required"] is True
+        assert parsed["team_size_min"] == 2
+        assert parsed["team_size_max"] == 5
+        assert parsed["country_limited"] is True
+        assert parsed["countries"] == ["India"]
+        assert parsed["needs_hardware"] is True
+        assert hackathons.listing_is_limited(parsed) is True
+        assert hackathons.eligibility_badge_labels(parsed) == [
+            "Students only",
+            "Team required (2+)",
+            "Country-limited",
+            "Needs hardware",
+        ]
+
+    def test_professionals_and_partner_audience(self):
+        # AWS CDS partner hackathon: sidebar says professionals; the page addresses partners.
+        html = _elig_page(
+            [
+                "<li>Above legal age of majority in country of residence</li>",
+                "<li>Professionals/Post grads only</li>",
+                "<li>All countries/territories, excluding standard exceptions</li>",
+            ],
+            description="<p>Calling all AWS Partners! We are inviting you to build.</p>",
+        )
+        parsed = hackathons.parse_eligibility_page(html)
+        assert parsed["professionals_only"] is True
+        assert parsed["partners_or_invite_only"] is True
+        assert parsed["students_only"] is False
+        assert hackathons.eligibility_badge_labels(parsed) == ["Restricted"]
+        assert hackathons.listing_is_limited(parsed) is True
+
+    def test_high_school_age_range_and_explicit_line(self):
+        gwc = hackathons.parse_eligibility_page(_elig_page([
+            "<li>Ages 14 to 18 only</li>",
+            "<li>Students only</li>",
+        ]))
+        assert gwc["high_school_only"] is True
+        assert gwc["students_only"] is True
+        assert hackathons.eligibility_badge_labels(gwc) == ["High school only"]
+
+        fuse = hackathons.parse_eligibility_page(_elig_page([
+            "<li>High school students only</li>",
+        ]))
+        assert fuse["high_school_only"] is True
+        assert hackathons.eligibility_badge_labels(fuse) == ["High school only"]
+        assert fuse["partners_or_invite_only"] is False
+
+    def test_high_school_phrase_in_the_requirements(self):
+        parsed = hackathons.parse_eligibility_page(_elig_page(
+            ["<li>Students only</li>"],
+            requirements="<p>Open to all high school students ages 14–18.</p>",
+        ))
+        assert parsed["high_school_only"] is True
+
+    def test_college_students_and_bare_team_requirement(self):
+        college = hackathons.parse_eligibility_page(_elig_page([
+            "<li>College students only</li>",
+        ]))
+        assert college["students_only"] is True
+        assert college["partners_or_invite_only"] is False
+        assert hackathons.eligibility_badge_labels(college) == ["Students only"]
+
+        team = hackathons.parse_eligibility_page(_elig_page([
+            "<li>Team required</li>",
+        ]))
+        assert team["team_required"] is True
+        assert team["team_size_min"] is None
+        assert hackathons.eligibility_badge_labels(team) == ["Team required"]
+        assert hackathons.listing_is_limited(team) is True
+
+    def test_named_community_is_restricted(self):
+        parsed = hackathons.parse_eligibility_page(_elig_page([
+            "<li>UBC &amp; BUCS Students only</li>",
+        ]))
+        assert parsed["students_only"] is True
+        assert parsed["partners_or_invite_only"] is True
+        assert "Restricted" in hackathons.eligibility_badge_labels(parsed)
+
+    def test_country_rules(self):
+        sanctions = hackathons.parse_eligibility_page(_elig_page([
+            "<li>Specific "
+            '<span data-tooltip title="Brazil, Crimea, Cuba, Iran Islamic Republic of, '
+            "Korea Democratic People&#39;s Republic of, Quebec, Russia, Syrian Arab Republic\">"
+            "countries/territories excluded</span></li>",
+        ]))
+        assert sanctions["country_limited"] is False
+
+        untitled = hackathons.parse_eligibility_page(_elig_page([
+            "<li>Specific countries/territories excluded</li>",
+        ]))
+        assert untitled["country_limited"] is False
+
+        extra = hackathons.parse_eligibility_page(_elig_page([
+            '<li>Specific <span data-tooltip title="Canada, Mexico">'
+            "countries/territories excluded</span></li>",
+        ]))
+        assert extra["country_limited"] is True
+        assert extra["countries"] == ["Canada", "Mexico"]
+        assert hackathons.listing_is_limited(extra) is False
+        assert hackathons.eligibility_badge_labels(extra) == ["Country-limited"]
+
+        included = hackathons.parse_eligibility_page(_elig_page([
+            "<li>Only specific countries/territories included</li>",
+        ]))
+        assert included["country_limited"] is True
+        assert included["countries"] == []
+        assert hackathons.listing_is_limited(included) is False
+
+    def test_minimum_age_is_not_a_closed_group(self):
+        for line in ("Ages 13+ only", "Ages 18+ only", "Ages 17+ only"):
+            parsed = hackathons.parse_eligibility_page(_elig_page([f"<li>{line}</li>"]))
+            assert hackathons.listing_is_limited(parsed) is False, line
+
+    def test_hardware_needs_a_clear_requirement(self):
+        assert hackathons.text_needs_hardware(
+            "algorithm design and hardware-software integration"
+        ) is False
+        assert hackathons.text_needs_hardware(
+            "No hardware required. You may mention a microcontroller in the writeup."
+        ) is False
+        assert hackathons.text_needs_hardware(
+            "Bring your robot and an Arduino to the arena."
+        ) is True
+        # Optional hardware in a video rule is not a requirement.
+        assert hackathons.text_needs_hardware(
+            "The video must include a clip showing the physical hardware/robot actually "
+            "operating, or if your project has no physical hardware component, the modules."
+        ) is False
+
+    def test_missing_sidebar_stays_unknown(self):
+        parsed = hackathons.parse_eligibility_page("<html><title>Just a moment...</title></html>")
+        assert parsed == hackathons.blank_eligibility()
+        assert hackathons.listing_is_limited(parsed) is False
+        assert hackathons.eligibility_badge_labels(parsed) == []
+
+    def test_codesprint_shape(self):
+        parsed = hackathons.parse_eligibility_page(_elig_page([
+            "<li>Above legal age of majority in country of residence</li>",
+            "<li>Students only</li>",
+            "<li>Team required: 2 to 5 members</li>",
+            "<li>Companies/professional organizations excluded from participation</li>",
+            "<li>All countries/territories, excluding standard exceptions</li>",
+        ]))
+        assert parsed["students_only"] is True
+        assert parsed["team_size_min"] == 2
+        assert parsed["country_limited"] is False
+        assert parsed["needs_hardware"] is False
+
+
+class TestEligibilityOutput:
+    def test_failed_page_keeps_the_listing_visible(self, monkeypatch):
+        sleeps = []
+        monkeypatch.setattr(hackathons.time, "sleep", lambda seconds: sleeps.append(seconds))
+        entries = [
+            hackathons.build_entry(make_item(title="Open")),
+            hackathons.build_entry(make_item(title="Broken", url="https://broken.devpost.com/")),
+        ]
+
+        def fetch(url):
+            if "broken" in url:
+                raise OSError("timeout")
+            return _elig_page(["<li>Above legal age of majority in country of residence</li>"])
+
+        stats = hackathons.attach_eligibility(entries, fetch_html=fetch, delay=1.5)
+        assert sleeps == [1.5, 1.5]
+        assert stats == {"eligibility_known": 1, "eligibility_unknown": 1}
+        assert entries[0]["eligibility_known"] is True
+        assert entries[0]["title"] == "Open"
+        assert entries[1]["eligibility_known"] is False
+        assert entries[1]["students_only"] is False
+        assert hackathons.listing_is_limited(entries[1]) is False
+
+    def test_html_badges_and_default_hide(self, tmp_path):
+        open_row = hackathons.build_entry(make_item(title="Anyone"))
+        student_row = hackathons.build_entry(make_item(
+            title="Campus Cup",
+            url="https://campus.example/",
+        ))
+        country_row = hackathons.build_entry(make_item(
+            title="India Only",
+            url="https://india.example/",
+        ))
+        hardware_row = hackathons.build_entry(make_item(
+            title="Robot Cup",
+            url="https://robot.example/",
+        ))
+        hackathons.attach_eligibility(
+            [open_row, student_row, country_row, hardware_row],
+            fetch_html=lambda url: {
+                "https://example.devpost.com/": _elig_page([
+                    "<li>Above legal age of majority in country of residence</li>",
+                ]),
+                "https://campus.example/": _elig_page([
+                    "<li>Students only</li>",
+                    "<li>Team required: 2 to 4 members</li>",
+                ]),
+                "https://india.example/": _elig_page([
+                    "<li>Only specific "
+                    '<span data-tooltip title="India">countries/territories included</span></li>',
+                ]),
+                "https://robot.example/": _elig_page(
+                    ["<li>Above legal age of majority in country of residence</li>"],
+                    requirements="<p>Bring your own hardware kit.</p>",
+                ),
+            }[url],
+            delay=0,
+        )
+        stats = {"total_count": 4, "fetched": 4, "pages_fetched": 1, "complete": True}
+        out = tmp_path / "index.html"
+        hackathons.write_html_doc([open_row, student_row, country_row, hardware_row], stats, out)
+        html = out.read_text(encoding="utf-8")
+        assert 'id="show-restricted"' in html
+        assert "Show restricted / team-only" in html
+        assert 'tr[data-restricted="1"]' in html
+        assert "showRestricted" in html
+        assert "class='badge limit'>Students only</span>" in html
+        assert "class='badge team'>Team required (2+)</span>" in html
+        assert "class='badge country'>Country-limited</span>" in html
+        assert "class='badge hardware'>Needs hardware</span>" in html
+        assert "data-restricted='1'" in html
+        assert "data-restricted='0'" in html
+        # Default sentence hides the one online students/team row, not the country or hardware rows.
+        assert "3 shown (1 restricted or team-only hidden, 0 in-person hidden, 0 skipped:" in html
+        json_path = tmp_path / "hackathons.json"
+        hackathons.write_json_doc([open_row, student_row, country_row, hardware_row], stats, json_path)
+        doc = json.loads(json_path.read_text(encoding="utf-8"))
+        campus = next(row for row in doc["hackathons"] if row["title"] == "Campus Cup")
+        assert campus["students_only"] is True
+        assert campus["team_size_min"] == 2
+        assert campus["prize_amount"] == 3000.0
+        assert doc["stats"]["restricted_or_team"] == 1
+        assert doc["stats"]["eligibility_known"] == 4
+        assert "Who can participate" in doc["note"]
+
+    def test_fetch_text_accepts_any_content_type(self, monkeypatch):
+        seen = {}
+
+        class FakeResponse:
+            def read(self):
+                return b"<ul id='eligibility-list'></ul>"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_urlopen(request, timeout):
+            seen["accept"] = request.get_header("Accept")
+            return FakeResponse()
+
+        monkeypatch.setattr(hackathons, "urlopen", fake_urlopen)
+        text = hackathons.fetch_text("https://example.devpost.com/")
+        assert "eligibility-list" in text
+        assert seen["accept"] == "*/*"
