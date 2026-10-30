@@ -1174,3 +1174,437 @@ class TestEligibilityOutput:
         text = hackathons.fetch_text("https://example.devpost.com/")
         assert "eligibility-list" in text
         assert seen["accept"] == "*/*"
+
+
+# ---------------------------------------------------------------------------
+# Additional sources
+# ---------------------------------------------------------------------------
+
+DEV_INDEX = """
+<a class="challenge-index-card" href="https://dev.to/challenges/week4">
+  <h3 class="challenge-index-card__title">Week 4</h3>
+  <span class="challenge-index-card__status challenge-index-card__status--live">Live</span>
+</a>
+<a class="challenge-index-card" href="https://dev.to/challenges/old">
+  <h3 class="challenge-index-card__title">Old One</h3>
+  <span class="challenge-index-card__status">Ended</span>
+</a>
+<a class="challenge-index-card" href="https://dev.to/challenges/swag">
+  <h3 class="challenge-index-card__title">Swag Week</h3>
+  <span class="challenge-index-card__status">Live</span>
+</a>
+"""
+
+DEV_CASH_PAGE = """
+<meta property="og:title" content="Week 4 - DEV Challenge — DEV Community">
+<div class="challenge-sidebar">
+  <span>Submissions due:</span> <span>October 31, 2026</span>
+</div>
+<div class="tw-font-semibold tw-text-lg">$250 USD</div>
+<div class="tw-font-semibold tw-text-lg">$200 USD</div>
+<div class="tw-font-semibold tw-text-lg">$100 USD</div>
+"""
+
+DEV_SWAG_PAGE = """
+<meta property="og:title" content="Swag Week - DEV Challenge">
+<span>Submissions due:</span> <span>November 15, 2026</span>
+<p>Badges for everyone.</p>
+"""
+
+DEV_STUDENT_PAGE = DEV_CASH_PAGE + "<p>This challenge is for students only.</p>"
+DEV_FEE_PAGE = DEV_CASH_PAGE + "<p>There is a $10 registration fee.</p>"
+
+
+def _superteam(summary, detail):
+    return hackathons.parse_superteam_listing(summary, detail, now=utc(2026, 10, 24, 15))
+
+
+class TestDevChallenges:
+    def test_index_marks_live_cards(self):
+        cards = hackathons.parse_dev_challenge_index(DEV_INDEX)
+        assert [(c["title"], c["status"]) for c in cards] == [
+            ("Week 4", "Live"),
+            ("Old One", "Ended"),
+            ("Swag Week", "Live"),
+        ]
+
+    def test_cash_page_sums_prize_boxes(self):
+        entry = hackathons.parse_dev_challenge_page(
+            DEV_CASH_PAGE, url="https://dev.to/challenges/week4", now=utc(2026, 10, 24, 15),
+        )
+        assert entry["title"] == "Week 4"
+        assert entry["source"] == "DEV"
+        assert entry["prize_amount"] == 550.0
+        assert entry["prize_display"] == "$550"
+        assert entry["cash_prizes"] == 3
+        assert entry["prize_currency"] == "$"
+        assert entry["is_online"] is True
+        assert entry["submission_deadline_utc"] == "2026-10-31T23:59:59Z"
+        assert entry["url"] == "https://dev.to/challenges/week4"
+
+    def test_drops_pages_without_cash_students_fees_or_past_deadlines(self):
+        assert hackathons.parse_dev_challenge_page(DEV_SWAG_PAGE, url="https://dev.to/challenges/swag") is None
+        assert hackathons.parse_dev_challenge_page(DEV_STUDENT_PAGE, url="https://dev.to/challenges/students") is None
+        assert hackathons.parse_dev_challenge_page(DEV_FEE_PAGE, url="https://dev.to/challenges/fee") is None
+        assert hackathons.parse_dev_challenge_page(
+            DEV_CASH_PAGE, url="https://dev.to/challenges/week4", now=utc(2026, 11, 1, 0),
+        ) is None
+
+    def test_loader_fetches_only_live_cards(self):
+        pages = {
+            "https://dev.to/challenges": DEV_INDEX,
+            "https://dev.to/challenges/week4": DEV_CASH_PAGE,
+            "https://dev.to/challenges/swag": DEV_SWAG_PAGE,
+        }
+        seen = []
+
+        def fetch(url):
+            seen.append(url)
+            return pages[url]
+
+        entries, stats = hackathons.load_dev_challenges(delay=0, fetch_html=fetch)
+        assert seen == [
+            "https://dev.to/challenges",
+            "https://dev.to/challenges/week4",
+            "https://dev.to/challenges/swag",
+        ]
+        assert [e["title"] for e in entries] == ["Week 4"]
+        assert stats["fetched"] == 2
+        assert stats["kept"] == 1
+        assert stats["complete"] is True
+
+
+class TestSuperteam:
+    def test_keeps_a_global_usdc_bounty(self):
+        entry = _superteam(
+            {
+                "slug": "raptorx-research-challenge-ask-better-questions-find-better-alpha",
+                "status": "OPEN",
+                "type": "bounty",
+                "token": "USDC",
+                "_count": {"Submission": 181, "Comments": 23},
+                "sponsor": {"name": "RaptorX"},
+            },
+            {
+                "title": "RaptorX Research Challenge: Ask Better Questions. Find Better Alpha.",
+                "slug": "raptorx-research-challenge-ask-better-questions-find-better-alpha",
+                "region": "Global",
+                "status": "OPEN",
+                "type": "bounty",
+                "token": "USDC",
+                "rewardAmount": 125,
+                "deadline": "2026-11-02T03:59:59.000Z",
+                "isWinnersAnnounced": False,
+                "isPrivate": False,
+                "rewards": {"1": 75, "2": 50},
+                "skills": [{"skills": "Content", "subskills": ["Research"]}],
+                "eligibility": [],
+                "description": "Open to anyone, anywhere.",
+            },
+        )
+        assert entry["source"] == "Superteam Earn"
+        assert entry["url"].endswith("/listing/raptorx-research-challenge-ask-better-questions-find-better-alpha")
+        assert entry["prize_amount"] == 125.0
+        assert entry["prize_display"] == "125 USDC"
+        assert entry["prize_currency_code"] == "USDC"
+        assert entry["prize_usd_approx"] == 125.0
+        assert entry["includes_non_cash_prizes"] is True
+        assert entry["registrations_count"] == 181
+        assert entry["count_label"] == "submission"
+        assert entry["cash_prizes"] == 2
+        assert entry["is_online"] is True
+        assert entry["submission_deadline_utc"] == "2026-11-02T03:59:59Z"
+        assert entry["themes"] == ["Content"]
+        assert entry["organization_name"] == "RaptorX"
+
+    def test_drops_regional_student_fee_and_empty_prizes(self):
+        base_summary = {"slug": "x", "status": "OPEN", "type": "bounty", "token": "USDC", "_count": {"Submission": 4}}
+        base_detail = {
+            "title": "Somewhere",
+            "slug": "x",
+            "region": "Global",
+            "status": "OPEN",
+            "type": "bounty",
+            "token": "USDC",
+            "rewardAmount": 100,
+            "deadline": "2026-12-01T00:00:00.000Z",
+            "rewards": {"1": 100},
+            "description": "Write something.",
+        }
+        spain = dict(base_detail, region="Spain", title="Rumbo")
+        assert _superteam(base_summary, spain) is None
+        students = dict(base_detail, description="University students only.")
+        assert _superteam(base_summary, students) is None
+        fee = dict(base_detail, description="Pay a registration fee to enter.")
+        assert _superteam(base_summary, fee) is None
+        free = dict(base_detail, description="There is no entry fee.")
+        assert _superteam(base_summary, free) is not None
+        unpaid = dict(base_detail, rewardAmount=0, maxRewardAsk=None)
+        assert _superteam(base_summary, unpaid) is None
+        closed = dict(base_detail, deadline="2026-10-01T00:00:00.000Z")
+        assert _superteam(base_summary, closed) is None
+
+    def test_loader_reads_details_and_keeps_global_only(self):
+        listings = [
+            {"slug": "global-one", "status": "OPEN", "type": "bounty", "token": "USDC",
+             "_count": {"Submission": 3}},
+            {"slug": "spain-one", "status": "OPEN", "type": "bounty", "token": "USDG",
+             "_count": {"Submission": 9}},
+        ]
+        details = {
+            "global-one": {
+                "title": "Global one", "slug": "global-one", "region": "Global",
+                "status": "OPEN", "type": "bounty", "token": "USDC", "rewardAmount": 40,
+                "deadline": "2026-12-01T00:00:00.000Z", "rewards": {"1": 40},
+                "description": "Remote.",
+            },
+            "spain-one": {
+                "title": "Spain one", "slug": "spain-one", "region": "Spain",
+                "status": "OPEN", "type": "bounty", "token": "USDG", "rewardAmount": 400,
+                "deadline": "2026-12-01T00:00:00.000Z", "rewards": {"1": 400},
+            },
+        }
+
+        def fetch(url):
+            if url == hackathons.SUPERTEAM_LISTINGS_URL:
+                return listings
+            slug = url.rstrip("/").split("/")[-1]
+            return details[slug]
+
+        entries, stats = hackathons.load_superteam(delay=0, fetch_json_fn=fetch)
+        assert [e["title"] for e in entries] == ["Global one"]
+        assert stats["fetched"] == 2
+        assert stats["kept"] == 1
+
+
+MLH_SEASON = {
+    "props": {
+        "upcomingEvents": [
+            {
+                "slug": "solana-hackathon",
+                "name": "Solana Hackathon",
+                "status": "pending",
+                "endsAt": "2026-11-08T19:00:00Z",
+                "url": "/events/solana-hackathon/prizes",
+                "location": "Online",
+                "formatType": "digital",
+            },
+            {
+                "slug": "campus-cup",
+                "name": "Campus Cup",
+                "status": "pending",
+                "endsAt": "2026-11-20T22:00:00Z",
+                "location": "Boston, MA",
+                "formatType": "physical",
+            },
+            {
+                "slug": "already-over",
+                "name": "Already Over",
+                "status": "ended",
+                "endsAt": "2026-10-01T19:00:00Z",
+                "location": "Online",
+                "formatType": "digital",
+            },
+        ]
+    }
+}
+
+MLH_PRIZES = {
+    "props": {
+        "challenges": [
+            {"name": "Grand prize", "prizeDescription": "$2,000"},
+            {"name": "Track", "prizeDescription": "500 USDC"},
+            {"name": "Swag", "prizeDescription": "MLH Swag Kits"},
+        ]
+    }
+}
+
+
+class TestMlh:
+    def test_online_upcoming_events_only(self):
+        chosen = hackathons.iter_mlh_online_events(MLH_SEASON, utc(2026, 10, 24, 15))
+        assert [event["slug"] for event in chosen] == ["solana-hackathon"]
+
+    def test_prize_page_sums_cash_and_stablecoins(self):
+        event = MLH_SEASON["props"]["upcomingEvents"][0]
+        entry = hackathons.parse_mlh_event(event, MLH_PRIZES, now=utc(2026, 10, 24, 15))
+        assert entry["source"] == "MLH"
+        assert entry["title"] == "Solana Hackathon"
+        assert entry["url"] == "https://www.mlh.com/events/solana-hackathon/prizes"
+        assert entry["prize_amount"] == 2500.0
+        assert entry["prize_display"] == "$2,500"
+        assert entry["cash_prizes"] == 2
+        assert entry["is_online"] is True
+        assert entry["includes_non_cash_prizes"] is True  # USDC and swag are named
+        assert entry["submission_deadline_utc"] == "2026-11-08T19:00:00Z"
+
+    def test_drops_swag_only_student_only_and_entry_fees(self):
+        event = {
+            "slug": "swag-night",
+            "name": "Swag Night",
+            "endsAt": "2026-12-01T18:00:00Z",
+            "location": "Online",
+            "formatType": "digital",
+        }
+        swag = {"props": {"challenges": [{"prizeDescription": "Stickers and a t-shirt"}]}}
+        assert hackathons.parse_mlh_event(event, swag, now=utc(2026, 10, 24, 15)) is None
+        students = {
+            "props": {"challenges": [{"prizeDescription": "$500. Limited to students."}]}
+        }
+        assert hackathons.parse_mlh_event(event, students, now=utc(2026, 10, 24, 15)) is None
+        fee = {
+            "props": {"challenges": [{"prizeDescription": "$500. Registration fee required."}]}
+        }
+        assert hackathons.parse_mlh_event(event, fee, now=utc(2026, 10, 24, 15)) is None
+
+    def test_loader_uses_saved_pages(self):
+        import json as json_lib
+
+        def fetch(url):
+            if url.endswith("/prizes"):
+                body = {"component": "HackathonPrizes", "props": MLH_PRIZES["props"]}
+            else:
+                body = {"component": "SeasonEvents/Index", "props": MLH_SEASON["props"]}
+            return '<script data-page="app" type="application/json">%s</script>' % json_lib.dumps(body)
+
+        entries, stats = hackathons.load_mlh(delay=0, fetch_html=fetch)
+        assert [e["title"] for e in entries] == ["Solana Hackathon"]
+        assert stats["fetched"] == 1
+        assert stats["kept"] == 1
+
+
+class TestDoraHacks:
+    def test_keeps_virtual_cash_and_hides_in_person(self):
+        # 1795000000 is 2026-11-18, after the frozen test clock.
+        virtual = hackathons.parse_dorahacks_hackathon({
+            "id": 2412,
+            "uname": "bchblaze2026",
+            "title": "BCH BLAZE 2026",
+            "venue_form": "Virtual",
+            "bonus_price": 8000,
+            "bonus_token": "USD",
+            "hackers_count": 171,
+            "timeline_end": 1795000000,
+            "winner_announced": False,
+            "tags": "Bitcoin,DeFi",
+            "owner": {"name": "BCH"},
+        }, now=utc(2026, 10, 24, 15))
+        assert virtual["source"] == "DoraHacks"
+        assert virtual["url"] == "https://dorahacks.io/hackathon/bchblaze2026"
+        assert virtual["prize_amount"] == 8000.0
+        assert virtual["prize_display"] == "$8,000"
+        assert virtual["is_online"] is True
+        assert virtual["registrations_count"] == 171
+        assert virtual["submission_deadline_utc"].startswith("2026-11-")
+
+        in_person = hackathons.parse_dorahacks_hackathon({
+            "id": 9,
+            "uname": "hskchainindia",
+            "title": "HSK Chain Horizon Hackathon",
+            "venue_form": "IRL",
+            "venue_name": "Bengaluru",
+            "bonus_price": 10000,
+            "bonus_token": "USD",
+            "hackers_count": 134,
+            "timeline_end": 1795000000,
+            "tags": "",
+        }, now=utc(2026, 10, 24, 15))
+        assert in_person["is_online"] is False
+        assert in_person["location"] == "Bengaluru"
+
+    def test_drops_zero_prize_students_fees_and_winners(self):
+        base = {
+            "id": 1,
+            "uname": "sample",
+            "title": "Sample",
+            "venue_form": "Virtual",
+            "bonus_price": 1000,
+            "bonus_token": "USD",
+            "hackers_count": 10,
+            "timeline_end": 1795000000,
+            "tags": "",
+            "description": "Build anything.",
+        }
+        assert hackathons.parse_dorahacks_hackathon(dict(base, bonus_price=0)) is None
+        assert hackathons.parse_dorahacks_hackathon(dict(base, tags="Blockchain,Student,Youth")) is None
+        assert hackathons.parse_dorahacks_hackathon(
+            dict(base, description="This hackathon is limited to students in 10th grade.")
+        ) is None
+        assert hackathons.parse_dorahacks_hackathon(
+            dict(base, description="An entry fee of $20 is required.")
+        ) is None
+        assert hackathons.parse_dorahacks_hackathon(dict(base, winner_announced=True)) is None
+        assert hackathons.parse_dorahacks_hackathon(
+            dict(base, timeline_end=1700000000), now=utc(2026, 10, 24, 15),
+        ) is None
+
+    def test_blocked_api_is_a_clear_error(self):
+        from urllib.error import HTTPError
+
+        def fetch(_url):
+            raise HTTPError("https://dorahacks.io/api/v1/hub/hackathons", 405, "Not Allowed", hdrs=None, fp=None)
+
+        with pytest.raises(RuntimeError, match="human-verification"):
+            hackathons.load_dorahacks(delay=0, fetch_json_fn=fetch)
+
+    def test_loader_parses_a_saved_page(self):
+        page = {
+            "count": 1,
+            "next": None,
+            "results": [{
+                "id": 2412,
+                "uname": "bchblaze2026",
+                "title": "BCH BLAZE 2026",
+                "venue_form": "Virtual",
+                "bonus_price": 8000,
+                "bonus_token": "USD",
+                "hackers_count": 12,
+                "timeline_end": 1795000000,
+                "tags": "Bitcoin",
+                "winner_announced": False,
+            }],
+        }
+
+        def fetch(url):
+            assert "status=" in url
+            return page
+
+        entries, stats = hackathons.load_dorahacks(delay=0, fetch_json_fn=fetch)
+        titles = {entry["title"] for entry in entries}
+        assert titles == {"BCH BLAZE 2026"}
+        assert stats["complete"] is True
+        assert stats["kept"] == 1
+
+
+class TestSourceIsolation:
+    def test_one_source_failing_keeps_the_others(self, capsys):
+        kept = hackathons.build_entry(make_item(title="Still here"))
+
+        def ok():
+            return [kept], {"fetched": 1, "kept": 1, "complete": True}
+
+        def broken():
+            raise RuntimeError("human-verification page")
+
+        entries, stats = hackathons.gather_listings([
+            ("Devpost", ok),
+            ("DoraHacks", broken),
+        ])
+        assert [entry["title"] for entry in entries] == ["Still here"]
+        assert stats["sources"]["DoraHacks"]["kept"] == 0
+        assert stats["sources"]["DoraHacks"]["complete"] is False
+        assert any("DoraHacks" in warning for warning in stats["warnings"])
+        err = capsys.readouterr().err
+        assert "warning:" in err
+        assert "DoraHacks" in err
+
+    def test_html_shows_the_platform(self, tmp_path):
+        entry = hackathons.build_entry(make_item(title="From Devpost"))
+        out = tmp_path / "index.html"
+        hackathons.write_html_doc([entry], {"fetched": 1, "complete": True, "warnings": []}, out)
+        html = out.read_text(encoding="utf-8")
+        assert "class='sub source'>Devpost</span>" not in html
+        assert "class='sub source'>Devpost</div>" in html
+        assert "data from" in html
+        assert "DEV" in html
+        assert "Superteam Earn" in html

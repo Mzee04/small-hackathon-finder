@@ -1,41 +1,65 @@
 # Small Hackathon Finder
 
-A free list of small, low-competition, cash-prize hackathons that are
-still open — for developers who want a realistic chance of winning.
-Refreshed twice a day (GitHub may run it a few hours late).
+A free list of small, low-competition, cash-prize hackathons and online
+contests that are still open — for developers who want a realistic chance
+of winning. Refreshed twice a day (GitHub may run it a few hours late).
 
-Twice a day a GitHub Actions workflow pulls the public listing of open
-hackathons from [Devpost](https://devpost.com/hackathons), keeps the ones
-that are open to everyone, still before their submission end date, and offer
-at least one cash prize, and ranks them by **prize money per registered
-participant** (in approximate US dollars) — a rough "less competition"
-signal. A hackathon with a decent prize and only a few dozen registrants
-sits at the top; a $100k prize with 30,000 registrants sinks to the bottom.
+Twice a day a GitHub Actions workflow pulls public listings from
+[Devpost](https://devpost.com/hackathons), [DEV challenges](https://dev.to/challenges),
+[Superteam Earn](https://earn.superteam.fun) (global bounties only), and
+[MLH](https://www.mlh.com/events) online events. DoraHacks has a public
+hackathon API too; when that site answers with a human-verification page,
+that source is skipped and the others are still published. It keeps contests
+that are still before their deadline and offer a cash or crypto prize, and
+ranks them by **prize money per registered participant** (in approximate US
+dollars) — a rough "less competition" signal. A hackathon with a decent
+prize and only a few dozen registrants sits at the top; a $100k prize with
+30,000 registrants sinks to the bottom. Each row names the platform it came
+from.
 
 **Live page:** https://mzee04.github.io/small-hackathon-finder/
 
 ## What it does
 
-1. Fetches every page of
-   `https://devpost.com/api/hackathons?status[]=open` politely
-   (identifying User-Agent, short delay between pages, retries with backoff),
-   and reports how many hackathons it got versus `meta.total_count`.
-   Then opens each kept hackathon page, with the same delay, and reads the
-   **Who can participate** sidebar. A page that cannot be read leaves that
-   row visible with no eligibility badge.
-2. Keeps only hackathons that are:
+1. Fetches every source on its own, politely (identifying User-Agent, short
+   delay between pages, retries with backoff). If one source errors or is
+   blocked, the build still writes the others and prints a warning.
+   - **Devpost:** every page of
+     `https://devpost.com/api/hackathons?status[]=open`, then each kept
+     hackathon page for the **Who can participate** sidebar. A page that
+     cannot be read leaves that row visible with no eligibility badge.
+     The report says how many hackathons it got versus `meta.total_count`.
+   - **DEV:** the public challenges page (there is no challenges JSON API).
+     Only cards marked Live are opened. Prize boxes such as `$250 USD` are
+     added up.
+   - **Superteam Earn:** `https://earn.superteam.fun/api/listings?status=open`,
+     then each listing's public detail. Only `region: Global` is kept.
+     Submission counts are used as the crowd number.
+   - **MLH:** the public season pages (the event data is JSON inside the
+     page). Online events only; prize text comes from each event's prizes
+     page. Swag-only events are left out.
+   - **DoraHacks:** `https://dorahacks.io/api/v1/hub/hackathons` for ongoing
+     and upcoming hackathons. If the response is a human-verification page,
+     the source is skipped.
+2. On Devpost, keeps only hackathons that are:
    - open (`open_state` is `open`),
    - still before the submission end date (Devpost's
      `submission_period_dates`, stored as the last second of that UTC day),
    - **not** invite-only,
    - offering at least one cash prize (`prizes_counts.cash >= 1`),
-   - with a prize amount that parses to a number above 0.
+   - with a prize amount that parses to a number above 0
+     (cash, or a crypto amount the feed actually states).
+   Listings from DEV, Superteam, MLH, and DoraHacks are also dropped when
+   their own text says the contest is students-only or charges an entry fee.
+   Devpost still only *hides* a closed group or a required team until you
+   tick the checkbox; it does not delete those rows.
    Prize amounts arrive as HTML like `$<span data-currency-value>1,500</span>`;
    they are parsed to a number and the currency symbol is kept as-is.
 3. Converts each prize to **approximate US dollars** using a small,
    hard-coded table of exchange rates in `hackathons.py` (`UNITS_PER_USD`,
    dated by `FX_RATES_DATE`), so ₹200,000 (about $2,100) does not rank
-   above $45,000. No live rates and no network call: the rates are rough
+   above $45,000. USD-pegged stablecoins (USDC, USDT, USDG, DAI, PYUSD)
+   count as one dollar each. No live rates and no network call: the rates are rough
    and dated, good enough for ordering, not for money decisions. A prize in
    a currency the table doesn't know (or an ambiguous symbol like ¥) keeps
    its raw value, is marked "currency not converted", and is always listed
@@ -61,7 +85,8 @@ sits at the top; a $100k prize with 30,000 registrants sinks to the bottom.
 
 The table shows the prize as listed (plus "≈ $…" for non-dollar prizes),
 number of registrants, approximate USD per registrant, the submission
-deadline, and whether the hackathon is online. Cards also show badges such
+deadline, whether the hackathon is online, and which platform the row came
+from. Cards also show badges such
 as **Students only**, **High school only**, **Team required (2+)**,
 **Restricted**, **Country-limited**, and **Needs hardware** when those
 apply. Time left is counted in the browser from that deadline, and a row
@@ -106,8 +131,9 @@ listings that are open to anyone stay in the default view. A country limit
 or a hardware need is badged and still shown. If eligibility could not be
 read, there is no badge and the row stays visible. An event Devpost marks
 as online, including one that only lists a host city, shows as Online.
-Click a title to open that hackathon on Devpost, then read its rules before
-entering.
+Click a title to open that contest on its own site, then read its rules before
+entering. The platform name under the title says whether the link goes to
+Devpost, DEV, Superteam Earn, MLH, or DoraHacks.
 For scripts, use [`hackathons.json`](https://mzee04.github.io/small-hackathon-finder/hackathons.json).
 
 ## Run the tests
@@ -135,8 +161,11 @@ from a branch → `main` / `docs` if it is not already on).
 
 ## Honest limits
 
-- **Devpost only.** Many hackathons live elsewhere; this list will never
-  claim to cover them.
+- **A handful of sources, not every hackathon site.** Devpost, DEV
+  challenges, global Superteam Earn bounties, and online MLH events are
+  included. DoraHacks is included only when its public API answers; a
+  human-verification page skips that source for the run. Plenty of
+  contests live somewhere else and will not appear.
 - **Registrants are not submissions.** Most people who register never
   submit a project, so real odds are usually better than the raw numbers
   suggest — but prize-per-registrant is a heuristic, not a prediction.
