@@ -177,23 +177,14 @@ export class ChainPoller {
       const watched = this.db.getWatchedAddresses();
       if (watched.length === 0) return;
 
-      // Poll a few chains concurrently so fast L2 tips (Arb/Base) don't
-      // drift thousands of blocks behind during a full sequential pass.
-      const concurrency = 3;
-      const chains = this.config.chains;
-      for (let i = 0; i < chains.length; i += concurrency) {
+      for (const chain of this.config.chains) {
         if (this.stopped) return;
-        const slice = chains.slice(i, i + concurrency);
-        await Promise.all(
-          slice.map(async (chain) => {
-            try {
-              await this.pollChain(chain, watched);
-            } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              console.warn(`[poller] ${chain.id}: ${message}`);
-            }
-          }),
-        );
+        try {
+          await this.pollChain(chain, watched);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[poller] ${chain.id}: ${message}`);
+        }
         if (this.config.chainDelayMs > 0) {
           await sleep(this.config.chainDelayMs);
         }
@@ -231,10 +222,10 @@ export class ChainPoller {
     // If hopelessly behind after an outage, snap near tip — public RPCs cannot
     // backfill thousands of dense blocks via full receipt scans in time.
     let lag = latest - fromBlock;
-    // Only snap after real outages — fast L2s naturally lag a few hundred
-    // blocks during a multi-chain tick; snapping those would drop alerts.
-    if (lag > 2500) {
-      const snapped = Math.max(0, latest - 24);
+    // Public RPCs cannot backfill dense history in time — prefer live tip
+    // watching. Fast L2s also drift during a 9-chain pass; snap rather than hang.
+    if (lag > 400) {
+      const snapped = Math.max(0, latest - 16);
       console.warn(
         `[poller] ${chain.id}: cursor lag=${lag} too large for public RPC; snapping ${fromBlock} → ${snapped}`,
       );
@@ -244,10 +235,7 @@ export class ChainPoller {
       if (lag <= 0) return;
     }
 
-    // Modest adaptive batch — large receipt batches hang on busy chains (BSC/Arb)
-    let batch = this.config.blockBatchSize;
-    if (lag > 100) batch = Math.min(12, Math.max(this.config.blockBatchSize, 12));
-    else if (lag > 30) batch = Math.min(10, Math.max(this.config.blockBatchSize, 10));
+    const batch = this.config.blockBatchSize;
     const toBlock = Math.min(latest, fromBlock + batch);
     const addressSet = new Map(
       watched.map((w) => [w.address.toLowerCase(), w] as const),
@@ -257,24 +245,7 @@ export class ChainPoller {
     const activities: DetectedActivity[] = [];
     const logs: Log[] = [];
     let blocksOk = 0;
-
-    // When catching up, prefer a single topic getLogs window (works on drpc /
-    // chain-official). Near tip, prefer eth_getBlockReceipts (PublicNode-safe).
-    const preferGetLogs = lag > 20;
-    let logsCovered = false;
-    if (preferGetLogs && addressList.length > 0) {
-      const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
-        client,
-        chain,
-        BigInt(fromBlock + 1),
-        BigInt(toBlock),
-        addressList,
-      );
-      if (viaGetLogs.ok) {
-        logs.push(...viaGetLogs.logs);
-        logsCovered = true;
-      }
-    }
+    let receiptCoverageOk = true;
 
     // Native + contract calls: scan transactions in the block range
     for (let blockNum = fromBlock + 1; blockNum <= toBlock; blockNum++) {
@@ -301,8 +272,6 @@ export class ChainPoller {
         }
       }
 
-      if (logsCovered) continue;
-
       // eth_getBlockReceipts — works on PublicNode without contract address
       const { logs: blockLogs, covered } = await this.logsFromBlockReceipts(
         client,
@@ -312,16 +281,19 @@ export class ChainPoller {
         block.transactions,
       );
       logs.push(...blockLogs);
-      if (!covered && blockNum === toBlock && addressList.length > 0) {
-        const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
-          client,
-          chain,
-          BigInt(fromBlock + 1),
-          BigInt(toBlock),
-          addressList,
-        );
-        logs.push(...viaGetLogs.logs);
-      }
+      if (!covered) receiptCoverageOk = false;
+    }
+
+    // Topic getLogs only when receipts unavailable (e.g. Avalanche C-Chain RPC)
+    if (!receiptCoverageOk && addressList.length > 0) {
+      const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
+        client,
+        chain,
+        BigInt(fromBlock + 1),
+        BigInt(toBlock),
+        addressList,
+      );
+      logs.push(...viaGetLogs.logs);
     }
 
     for (const log of logs) {

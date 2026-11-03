@@ -85,9 +85,9 @@ See `.env.example`. Important knobs:
 | `TELEGRAM_BOT_TOKEN` | BotFather token |
 | `ADMIN_TELEGRAM_USER_ID` | Admin numeric id |
 | `DATABASE_PATH` | SQLite file path |
-| `POLL_INTERVAL_MS` | How often to poll (default 15000) |
-| `BLOCK_BATCH_SIZE` | Max new blocks per chain per tick (default 8) |
-| `CHAIN_DELAY_MS` | Pause between chains (default 800) |
+| `POLL_INTERVAL_MS` | How often to poll (default 12000) |
+| `BLOCK_BATCH_SIZE` | Max new blocks per chain per tick (default 4) |
+| `CHAIN_DELAY_MS` | Pause between chains (default 500) |
 | `ENABLED_CHAINS` | Comma list of chain ids from `chains.json` |
 | `RPC_<CHAIN>` | Optional RPC override (prepended; still falls back to `chains.json` `rpcUrls`) |
 | `DRY_RUN` | `1` = skip chain polling |
