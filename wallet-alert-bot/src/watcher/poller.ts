@@ -219,12 +219,24 @@ export class ChainPoller {
 
     if (fromBlock >= latest) return;
 
-    // Adaptive batch: catch up faster after outages without hammering tip forever
-    const lag = latest - fromBlock;
+    // If hopelessly behind after an outage, snap near tip — public RPCs cannot
+    // backfill thousands of dense blocks via full receipt scans in time.
+    let lag = latest - fromBlock;
+    if (lag > 1500) {
+      const snapped = Math.max(0, latest - 24);
+      console.warn(
+        `[poller] ${chain.id}: cursor lag=${lag} too large for public RPC; snapping ${fromBlock} → ${snapped}`,
+      );
+      fromBlock = snapped;
+      this.db.setCursor(chain.id, fromBlock);
+      lag = latest - fromBlock;
+      if (lag <= 0) return;
+    }
+
+    // Modest adaptive batch — large receipt batches hang on busy chains (BSC/Arb)
     let batch = this.config.blockBatchSize;
-    if (lag > 500) batch = Math.min(40, this.config.blockBatchSize * 5);
-    else if (lag > 100) batch = Math.min(24, this.config.blockBatchSize * 3);
-    else if (lag > 30) batch = Math.min(16, this.config.blockBatchSize * 2);
+    if (lag > 100) batch = Math.min(12, Math.max(this.config.blockBatchSize, 12));
+    else if (lag > 30) batch = Math.min(10, Math.max(this.config.blockBatchSize, 10));
     const toBlock = Math.min(latest, fromBlock + batch);
     const addressSet = new Map(
       watched.map((w) => [w.address.toLowerCase(), w] as const),
@@ -234,7 +246,24 @@ export class ChainPoller {
     const activities: DetectedActivity[] = [];
     const logs: Log[] = [];
     let blocksOk = 0;
-    let receiptCoverageOk = true;
+
+    // When catching up, prefer a single topic getLogs window (works on drpc /
+    // chain-official). Near tip, prefer eth_getBlockReceipts (PublicNode-safe).
+    const preferGetLogs = lag > 20;
+    let logsCovered = false;
+    if (preferGetLogs && addressList.length > 0) {
+      const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
+        client,
+        chain,
+        BigInt(fromBlock + 1),
+        BigInt(toBlock),
+        addressList,
+      );
+      if (viaGetLogs.ok) {
+        logs.push(...viaGetLogs.logs);
+        logsCovered = true;
+      }
+    }
 
     // Native + contract calls: scan transactions in the block range
     for (let blockNum = fromBlock + 1; blockNum <= toBlock; blockNum++) {
@@ -261,7 +290,9 @@ export class ChainPoller {
         }
       }
 
-      // Prefer eth_getBlockReceipts — works on PublicNode without contract address
+      if (logsCovered) continue;
+
+      // eth_getBlockReceipts — works on PublicNode without contract address
       const { logs: blockLogs, covered } = await this.logsFromBlockReceipts(
         client,
         chain,
@@ -270,20 +301,16 @@ export class ChainPoller {
         block.transactions,
       );
       logs.push(...blockLogs);
-      if (!covered) receiptCoverageOk = false;
-    }
-
-    // Only fall back to topic getLogs when receipt scanning could not cover
-    // the window (e.g. Avalanche official lacks eth_getBlockReceipts).
-    if (!receiptCoverageOk && addressList.length > 0) {
-      const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
-        client,
-        chain,
-        BigInt(fromBlock + 1),
-        BigInt(toBlock),
-        addressList,
-      );
-      logs.push(...viaGetLogs);
+      if (!covered && blockNum === toBlock && addressList.length > 0) {
+        const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
+          client,
+          chain,
+          BigInt(fromBlock + 1),
+          BigInt(toBlock),
+          addressList,
+        );
+        logs.push(...viaGetLogs.logs);
+      }
     }
 
     for (const log of logs) {
@@ -455,11 +482,14 @@ export class ChainPoller {
     fromBlock: bigint,
     toBlock: bigint,
     addresses: Hex[],
-  ): Promise<Log[]> {
-    if (addresses.length === 0) return [];
+  ): Promise<{ logs: Log[]; restricted: boolean; ok: boolean }> {
+    if (addresses.length === 0) {
+      return { logs: [], restricted: false, ok: true };
+    }
 
     const all: Log[] = [];
     let restricted = false;
+    let okCount = 0;
 
     for (const addr of addresses) {
       if (restricted) break;
@@ -503,6 +533,7 @@ export class ChainPoller {
           },
         );
         all.push(...batches);
+        okCount += 1;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (isRestrictedGetLogsError(message)) {
@@ -517,7 +548,11 @@ export class ChainPoller {
       await sleep(80);
     }
 
-    return all;
+    return {
+      logs: all,
+      restricted,
+      ok: !restricted && okCount === addresses.length,
+    };
   }
 
   private async summarizeLog(
