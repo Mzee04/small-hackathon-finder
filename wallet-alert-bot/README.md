@@ -86,8 +86,8 @@ See `.env.example`. Important knobs:
 | `ADMIN_TELEGRAM_USER_ID` | Admin numeric id |
 | `DATABASE_PATH` | SQLite file path |
 | `POLL_INTERVAL_MS` | How often to poll (default 15000) |
-| `BLOCK_BATCH_SIZE` | Max new blocks per chain per tick (default 3) |
-| `CHAIN_DELAY_MS` | Pause between chains (default 1000) |
+| `BLOCK_BATCH_SIZE` | Max new blocks per chain per tick (default 8) |
+| `CHAIN_DELAY_MS` | Pause between chains (default 800) |
 | `ENABLED_CHAINS` | Comma list of chain ids from `chains.json` |
 | `RPC_<CHAIN>` | Optional RPC override (prepended; still falls back to `chains.json` `rpcUrls`) |
 | `DRY_RUN` | `1` = skip chain polling |

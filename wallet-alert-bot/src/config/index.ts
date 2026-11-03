@@ -31,8 +31,8 @@ const envSchema = z.object({
   ADMIN_TELEGRAM_USER_ID: z.coerce.number().int().positive(),
   DATABASE_PATH: z.string().default("./data/bot.sqlite"),
   POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
-  BLOCK_BATCH_SIZE: z.coerce.number().int().positive().default(3),
-  CHAIN_DELAY_MS: z.coerce.number().int().nonnegative().default(1000),
+  BLOCK_BATCH_SIZE: z.coerce.number().int().positive().default(8),
+  CHAIN_DELAY_MS: z.coerce.number().int().nonnegative().default(800),
   REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
   ENABLED_CHAINS: z.string().default(
     "ethereum,base,arbitrum,optimism,polygon,bsc,avalanche,robinhood,ink",
