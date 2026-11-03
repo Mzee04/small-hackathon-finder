@@ -86,28 +86,23 @@ See `.env.example`. Important knobs:
 | `ADMIN_TELEGRAM_USER_ID` | Admin numeric id |
 | `DATABASE_PATH` | SQLite file path |
 | `POLL_INTERVAL_MS` | How often to poll (default 15000) |
-| `BLOCK_BATCH_SIZE` | Max new blocks per chain per tick (default 5) |
-| `CHAIN_DELAY_MS` | Pause between chains (default 800) |
+| `BLOCK_BATCH_SIZE` | Max new blocks per chain per tick (default 3) |
+| `CHAIN_DELAY_MS` | Pause between chains (default 1000) |
 | `ENABLED_CHAINS` | Comma list of chain ids from `chains.json` |
-| `RPC_<CHAIN>` | Optional paid RPC override (`RPC_ETHEREUM`, `RPC_BASE`, …) |
+| `RPC_<CHAIN>` | Optional RPC override (prepended; still falls back to `chains.json` `rpcUrls`) |
 | `DRY_RUN` | `1` = skip chain polling |
 
 ## Public RPC rate limits
 
-Public endpoints (publicnode, etc.) will **rate-limit** under multi-chain polling. The bot mitigates with:
+Free public endpoints rate-limit under multi-chain polling. Defaults prefer **drpc / chain-official** URLs that allow receipts or topic logs without paid keys; PublicNode remains a fallback. The bot mitigates with:
 
+- Multi-URL `fallback` transport per chain (`chains.json` `rpcUrls`)
 - Small `BLOCK_BATCH_SIZE` and `CHAIN_DELAY_MS`
 - Exponential backoff on 429/timeouts
 - Cursor starts near chain tip (no historical backfill on first boot)
-- Chunked `eth_getLogs` queries
+- Token detection via `eth_getBlockReceipts` (avoids PublicNode’s “specify an address” `eth_getLogs` restriction), with `eth_getLogs` only as fallback when receipts are unavailable
 
-If alerts lag or logs show repeated rate errors, set Alchemy/QuickNode URLs:
-
-```env
-RPC_ETHEREUM=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
-RPC_BASE=https://base-mainnet.g.alchemy.com/v2/YOUR_KEY
-# …same pattern for other chains (see .env.example)
-```
+Paid Alchemy/QuickNode URLs are optional — set `RPC_*` if you want them as the primary endpoint.
 
 Or reduce `ENABLED_CHAINS` to the networks you care about.
 
@@ -117,7 +112,7 @@ Each tick, per enabled chain:
 
 1. Advance from the stored block cursor in batches.
 2. Scan block transactions where `from`/`to` matches a watched wallet (native + contract calls).
-3. Pull `Transfer` / `Approval` / `ApprovalForAll` logs involving watched wallets (tokens + NFTs).
+3. Load block receipts and filter `Transfer` / `Approval` / `ApprovalForAll` involving watched wallets (tokens + NFTs). Fall back to topic `eth_getLogs` only if receipt scanning is unsupported on that RPC.
 4. Deduplicate alerts in SQLite and DM each owning Telegram user.
 
 ## Layout
