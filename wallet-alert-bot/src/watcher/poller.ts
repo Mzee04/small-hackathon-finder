@@ -222,7 +222,7 @@ export class ChainPoller {
     // If hopelessly behind after an outage, snap near tip — public RPCs cannot
     // backfill thousands of dense blocks via full receipt scans in time.
     let lag = latest - fromBlock;
-    if (lag > 1500) {
+    if (lag > 800) {
       const snapped = Math.max(0, latest - 24);
       console.warn(
         `[poller] ${chain.id}: cursor lag=${lag} too large for public RPC; snapping ${fromBlock} → ${snapped}`,
