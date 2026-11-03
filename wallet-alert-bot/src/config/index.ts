@@ -16,20 +16,26 @@ const chainSchema = z.object({
   chainId: z.number().int().positive(),
   rpcEnv: z.string(),
   defaultRpc: z.string().url(),
+  rpcUrls: z.array(z.string().url()).optional(),
   explorerTx: z.string(),
   nativeSymbol: z.string(),
 });
 
-export type ChainConfig = z.infer<typeof chainSchema> & { rpcUrl: string };
+export type ChainConfig = z.infer<typeof chainSchema> & {
+  rpcUrl: string;
+  rpcUrlList: string[];
+};
 
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(10),
   ADMIN_TELEGRAM_USER_ID: z.coerce.number().int().positive(),
   DATABASE_PATH: z.string().default("./data/bot.sqlite"),
-  POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
-  BLOCK_BATCH_SIZE: z.coerce.number().int().positive().default(5),
-  CHAIN_DELAY_MS: z.coerce.number().int().nonnegative().default(800),
-  REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+  POLL_INTERVAL_MS: z.coerce.number().int().positive().default(10_000),
+  BLOCK_BATCH_SIZE: z.coerce.number().int().positive().default(8),
+  CATCHUP_BATCH_SIZE: z.coerce.number().int().positive().default(80),
+  RECEIPT_CONCURRENCY: z.coerce.number().int().positive().default(10),
+  CHAIN_DELAY_MS: z.coerce.number().int().nonnegative().default(0),
+  REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(12_000),
   ENABLED_CHAINS: z.string().default(
     "ethereum,base,arbitrum,optimism,polygon,bsc,avalanche,robinhood,ink",
   ),
@@ -38,6 +44,20 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v === "1" || v?.toLowerCase() === "true"),
 });
+
+function uniqueUrls(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of urls) {
+    const url = raw.trim();
+    if (!url) continue;
+    const key = url.replace(/\/+$/, "").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(url);
+  }
+  return out;
+}
 
 function loadChainsFile(): z.infer<typeof chainSchema>[] {
   const candidates = [
@@ -58,6 +78,8 @@ export type AppConfig = {
   databasePath: string;
   pollIntervalMs: number;
   blockBatchSize: number;
+  catchupBatchSize: number;
+  receiptConcurrency: number;
   chainDelayMs: number;
   requestTimeoutMs: number;
   dryRun: boolean;
@@ -76,9 +98,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     .filter((c) => enabled.has(c.id.toLowerCase()))
     .map((c) => {
       const override = env[c.rpcEnv]?.trim();
+      const fromFile = c.rpcUrls?.length
+        ? c.rpcUrls
+        : [c.defaultRpc];
+      const rpcUrlList = uniqueUrls(
+        override && override.length > 0
+          ? [override, ...fromFile, c.defaultRpc]
+          : [...fromFile, c.defaultRpc],
+      );
       return {
         ...c,
-        rpcUrl: override && override.length > 0 ? override : c.defaultRpc,
+        rpcUrl: rpcUrlList[0]!,
+        rpcUrlList,
       };
     });
 
@@ -92,6 +123,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     databasePath: resolve(parsed.DATABASE_PATH),
     pollIntervalMs: parsed.POLL_INTERVAL_MS,
     blockBatchSize: parsed.BLOCK_BATCH_SIZE,
+    catchupBatchSize: Math.max(
+      parsed.CATCHUP_BATCH_SIZE,
+      parsed.BLOCK_BATCH_SIZE,
+    ),
+    receiptConcurrency: parsed.RECEIPT_CONCURRENCY,
     chainDelayMs: parsed.CHAIN_DELAY_MS,
     requestTimeoutMs: parsed.REQUEST_TIMEOUT_MS,
     dryRun: Boolean(parsed.DRY_RUN),

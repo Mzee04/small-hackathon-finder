@@ -1,5 +1,6 @@
 import {
   createPublicClient,
+  fallback,
   formatEther,
   formatUnits,
   http,
@@ -8,6 +9,7 @@ import {
   type Log,
   type PublicClient,
   type Transaction,
+  type TransactionReceipt,
 } from "viem";
 import type { AppConfig, ChainConfig } from "../config/index.js";
 import type { BotDatabase, WatchedAddress } from "../db/database.js";
@@ -22,6 +24,13 @@ const approvalEvent = parseAbiItem(
 const approvalForAllEvent = parseAbiItem(
   "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)",
 );
+
+const TRANSFER_SIG =
+  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const APPROVAL_SIG =
+  "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
+const APPROVAL_FOR_ALL_SIG =
+  "0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31";
 
 const ERC20_ABI = [
   {
@@ -52,6 +61,58 @@ function explorerUrl(chain: ChainConfig, hash: string): string {
   return chain.explorerTx.replace("{hash}", hash);
 }
 
+function topicAddr(topic: Hex | undefined): string | null {
+  if (!topic || topic.length < 42) return null;
+  return `0x${topic.slice(-40)}`.toLowerCase();
+}
+
+function logTouchesWatched(
+  log: Log | { topics: readonly Hex[]; address: Hex },
+  addressSet: Map<string, WatchedAddress>,
+): boolean {
+  const topics = log.topics;
+  const sig = topics[0];
+  if (sig === TRANSFER_SIG) {
+    const from = topicAddr(topics[1]);
+    const to = topicAddr(topics[2]);
+    return Boolean(
+      (from && addressSet.has(from)) || (to && addressSet.has(to)),
+    );
+  }
+  if (sig === APPROVAL_SIG || sig === APPROVAL_FOR_ALL_SIG) {
+    const owner = topicAddr(topics[1]);
+    return Boolean(owner && addressSet.has(owner));
+  }
+  return false;
+}
+
+function isRestrictedGetLogsError(message: string): boolean {
+  return /specify an address|archive|dedicated full node|Invalid parameters|403|method not available|not allowed|-32701|ranges over/i.test(
+    message,
+  );
+}
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, Math.max(1, items.length)) },
+    async () => {
+      while (true) {
+        const i = next++;
+        if (i >= items.length) return;
+        results[i] = await fn(items[i]!);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 async function withBackoff<T>(
   label: string,
   fn: () => Promise<T>,
@@ -65,7 +126,9 @@ async function withBackoff<T>(
       lastError = err;
       const message = err instanceof Error ? err.message : String(err);
       const retryable =
-        /429|rate|timeout|ECONNRESET|503|502|fetch failed/i.test(message);
+        /429|rate|timeout|ECONNRESET|503|502|fetch failed|limit exceeded|request limit/i.test(
+          message,
+        );
       if (!retryable || i === attempts - 1) break;
       const delay = 1000 * 2 ** i + Math.floor(Math.random() * 250);
       console.warn(`[rpc] ${label} failed (${message}); retry in ${delay}ms`);
@@ -75,13 +138,18 @@ async function withBackoff<T>(
   throw lastError;
 }
 
-export type ActivityHandler = (activity: DetectedActivity, telegramIds: number[]) => Promise<void>;
+export type ActivityHandler = (
+  activity: DetectedActivity,
+  telegramIds: number[],
+) => Promise<void>;
 
 export class ChainPoller {
   private clients = new Map<string, PublicClient>();
   private stopped = false;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  /** Chains whose eth_getLogs requires a contract address */
+  private restrictedLogs = new Set<string>();
 
   constructor(
     private readonly config: AppConfig,
@@ -89,13 +157,22 @@ export class ChainPoller {
     private readonly onActivity: ActivityHandler,
   ) {
     for (const chain of config.chains) {
-      const client = createPublicClient({
-        transport: http(chain.rpcUrl, {
+      const transports = chain.rpcUrlList.map((url) =>
+        http(url, {
           timeout: config.requestTimeoutMs,
           retryCount: 0,
         }),
+      );
+      const client = createPublicClient({
+        transport:
+          transports.length === 1
+            ? transports[0]!
+            : fallback(transports, { rank: false }),
       });
       this.clients.set(chain.id, client as PublicClient);
+      console.log(
+        `[poller] ${chain.id} RPCs: ${chain.rpcUrlList.join(" → ")}`,
+      );
     }
   }
 
@@ -105,7 +182,7 @@ export class ChainPoller {
       return;
     }
     console.log(
-      `[poller] watching ${this.config.chains.map((c) => c.id).join(", ")} every ${this.config.pollIntervalMs}ms`,
+      `[poller] watching ${this.config.chains.map((c) => c.id).join(", ")} every ${this.config.pollIntervalMs}ms (batch=${this.config.blockBatchSize}, catchup=${this.config.catchupBatchSize}, parallel chains)`,
     );
     void this.tick();
     this.timer = setInterval(() => void this.tick(), this.config.pollIntervalMs);
@@ -123,22 +200,35 @@ export class ChainPoller {
       const watched = this.db.getWatchedAddresses();
       if (watched.length === 0) return;
 
-      for (const chain of this.config.chains) {
-        if (this.stopped) return;
-        try {
+      // Parallel per-chain polling keeps L2 tips reachable on public RPCs.
+      const results = await Promise.allSettled(
+        this.config.chains.map(async (chain) => {
+          if (this.stopped) return;
           await this.pollChain(chain, watched);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+        }),
+      );
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i]!;
+        if (result.status === "rejected") {
+          const chain = this.config.chains[i]!;
+          const message =
+            result.reason instanceof Error
+              ? result.reason.message
+              : String(result.reason);
           console.warn(`[poller] ${chain.id}: ${message}`);
-        }
-        if (this.config.chainDelayMs > 0) {
-          await sleep(this.config.chainDelayMs);
         }
       }
       this.db.pruneAlerted(14);
     } finally {
       this.running = false;
     }
+  }
+
+  private adaptiveWindow(lag: number): number {
+    if (lag <= 0) return 0;
+    if (lag <= this.config.blockBatchSize) return lag;
+    // Catch up in larger chunks; never snap over history.
+    return Math.min(lag, this.config.catchupBatchSize);
   }
 
   private async pollChain(
@@ -165,54 +255,118 @@ export class ChainPoller {
 
     if (fromBlock >= latest) return;
 
-    const toBlock = Math.min(latest, fromBlock + this.config.blockBatchSize);
+    const lag = latest - fromBlock;
+    const window = this.adaptiveWindow(lag);
+    const toBlock = fromBlock + window;
+    if (toBlock <= fromBlock) return;
+
+    if (lag > this.config.catchupBatchSize * 2) {
+      console.warn(
+        `[poller] ${chain.id}: catching up lag=${lag} (scanning ${fromBlock + 1}-${toBlock}, no snap)`,
+      );
+    }
+
     const addressSet = new Map(
       watched.map((w) => [w.address.toLowerCase(), w] as const),
     );
     const addressList = [...addressSet.keys()] as Hex[];
 
     const activities: DetectedActivity[] = [];
+    const logs: Log[] = [];
+    const involvedTx = new Map<
+      string,
+      { hash: Hex; wallet: string; blockNumber: number }
+    >();
 
-    // Native + contract calls: scan transactions in the block range
-    for (let blockNum = fromBlock + 1; blockNum <= toBlock; blockNum++) {
-      const block = await withBackoff(`${chain.id}:getBlock:${blockNum}`, () =>
-        client.getBlock({
-          blockNumber: BigInt(blockNum),
-          includeTransactions: true,
-        }),
+    // 1) Topic getLogs for ERC-20 / NFT / approvals when the RPC allows it.
+    let logsCovered = false;
+    if (
+      addressList.length > 0 &&
+      !this.restrictedLogs.has(chain.id)
+    ) {
+      const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
+        client,
+        chain,
+        BigInt(fromBlock + 1),
+        BigInt(toBlock),
+        addressList,
       );
+      if (viaGetLogs.restricted) {
+        this.restrictedLogs.add(chain.id);
+      } else if (viaGetLogs.ok) {
+        logs.push(...viaGetLogs.logs);
+        logsCovered = true;
+      }
+    }
 
-      for (const tx of block.transactions) {
-        if (typeof tx === "string") continue;
-        const candidates: string[] = [];
-        if (tx.from) candidates.push(tx.from.toLowerCase());
-        if (tx.to) candidates.push(tx.to.toLowerCase());
-        const involved = candidates.filter((a) => addressSet.has(a));
-        if (involved.length === 0) continue;
+    // 2) Parallel block receipts: native/contract from/to + log fallback.
+    const blockNums: number[] = [];
+    for (let n = fromBlock + 1; n <= toBlock; n++) blockNums.push(n);
 
-        for (const wallet of new Set(involved)) {
-          activities.push(
-            this.summarizeTx(chain, tx, wallet, Number(block.number)),
-          );
+    const receiptResults = await mapPool(
+      blockNums,
+      this.config.receiptConcurrency,
+      async (blockNum) => {
+        if (this.stopped) {
+          return { blockNum, logs: [] as Log[], covered: false, involved: [] as { hash: Hex; wallet: string }[] };
+        }
+        return this.scanBlock(client, chain, blockNum, addressSet, logsCovered);
+      },
+    );
+
+    let blocksOk = 0;
+    for (const result of receiptResults) {
+      if (!result) continue;
+      blocksOk += 1;
+      logs.push(...result.logs);
+      for (const hit of result.involved) {
+        const key = `${hit.hash}:${hit.wallet}`;
+        if (!involvedTx.has(key)) {
+          involvedTx.set(key, {
+            hash: hit.hash,
+            wallet: hit.wallet,
+            blockNumber: result.blockNum,
+          });
         }
       }
     }
 
-    // Token transfers / approvals via logs (covers txs where wallet is not outer from/to)
-    const logs = await this.fetchRelevantLogs(
-      client,
-      chain,
-      BigInt(fromBlock + 1),
-      BigInt(toBlock),
-      addressList,
+    // 3) Fetch full txs only for wallets that appear as outer from/to.
+    const txHits = [...involvedTx.values()];
+    const txs = await mapPool(
+      txHits,
+      Math.min(6, this.config.receiptConcurrency),
+      async (hit) => {
+        try {
+          const tx = await withBackoff(`${chain.id}:tx:${hit.hash}`, () =>
+            client.getTransaction({ hash: hit.hash }),
+          );
+          return { hit, tx };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[poller] ${chain.id} getTransaction ${hit.hash}: ${message}`);
+          return null;
+        }
+      },
     );
+
+    for (const item of txs) {
+      if (!item) continue;
+      activities.push(
+        this.summarizeTx(
+          chain,
+          item.tx,
+          item.hit.wallet,
+          item.hit.blockNumber,
+        ),
+      );
+    }
 
     for (const log of logs) {
       const activity = await this.summarizeLog(client, chain, log, addressSet);
       if (activity) activities.push(activity);
     }
 
-    // Dedupe by chain+hash+wallet+kind summary before notify
     const seen = new Set<string>();
     for (const activity of activities) {
       const key = `${activity.txHash}:${activity.wallet}:${activity.kind}:${activity.summary}`;
@@ -235,6 +389,113 @@ export class ChainPoller {
     }
 
     this.db.setCursor(chain.id, toBlock);
+    console.log(
+      `[poller] ${chain.id}: blocks ${fromBlock + 1}-${toBlock} tip=${latest} scanned=${blocksOk} lag=${latest - toBlock} activities=${activities.length}`,
+    );
+  }
+
+  private async scanBlock(
+    client: PublicClient,
+    chain: ChainConfig,
+    blockNum: number,
+    addressSet: Map<string, WatchedAddress>,
+    logsCovered: boolean,
+  ): Promise<{
+    blockNum: number;
+    logs: Log[];
+    covered: boolean;
+    involved: { hash: Hex; wallet: string }[];
+  }> {
+    const involved: { hash: Hex; wallet: string }[] = [];
+    const pushInvolved = (hash: Hex, from?: string | null, to?: string | null) => {
+      const candidates = [from, to]
+        .filter(Boolean)
+        .map((a) => a!.toLowerCase());
+      for (const wallet of new Set(candidates)) {
+        if (addressSet.has(wallet)) {
+          involved.push({ hash, wallet });
+        }
+      }
+    };
+
+    try {
+      const receipts = await withBackoff(
+        `${chain.id}:blockReceipts:${blockNum}`,
+        () => client.getBlockReceipts({ blockNumber: BigInt(blockNum) }),
+        3,
+      );
+      if (receipts) {
+        const outLogs: Log[] = [];
+        for (const receipt of receipts) {
+          pushInvolved(
+            receipt.transactionHash,
+            receipt.from,
+            receipt.to ?? null,
+          );
+          if (!logsCovered) {
+            outLogs.push(
+              ...this.filterReceiptLogs([receipt], addressSet),
+            );
+          }
+        }
+        return { blockNum, logs: outLogs, covered: true, involved };
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/does not exist|not available|not allowed|null/i.test(message)) {
+        // Fall through to getBlock path
+        if (!/429|rate|timeout|limit/i.test(message)) {
+          // quiet common fallback
+        }
+      }
+    }
+
+    // Fallback: full block with transactions
+    const block = await withBackoff(`${chain.id}:getBlock:${blockNum}`, () =>
+      client.getBlock({
+        blockNumber: BigInt(blockNum),
+        includeTransactions: true,
+      }),
+    );
+
+    for (const tx of block.transactions) {
+      if (typeof tx === "string") continue;
+      pushInvolved(tx.hash, tx.from, tx.to ?? null);
+    }
+
+    if (logsCovered) {
+      return { blockNum, logs: [], covered: false, involved };
+    }
+
+    // Per-tx receipts only for involved hashes (partial ERC-20 receive coverage)
+    const outLogs: Log[] = [];
+    const hashes = [...new Set(involved.map((i) => i.hash))];
+    for (const hash of hashes) {
+      try {
+        const receipt = await withBackoff(`${chain.id}:receipt:${hash}`, () =>
+          client.getTransactionReceipt({ hash }),
+        );
+        outLogs.push(...this.filterReceiptLogs([receipt], addressSet));
+      } catch {
+        // ignore
+      }
+    }
+    return { blockNum, logs: outLogs, covered: false, involved };
+  }
+
+  private filterReceiptLogs(
+    receipts: readonly TransactionReceipt[],
+    addressSet: Map<string, WatchedAddress>,
+  ): Log[] {
+    const out: Log[] = [];
+    for (const receipt of receipts) {
+      for (const log of receipt.logs) {
+        if (logTouchesWatched(log, addressSet)) {
+          out.push(log as Log);
+        }
+      }
+    }
+    return out;
   }
 
   private summarizeTx(
@@ -290,59 +551,84 @@ export class ChainPoller {
     };
   }
 
-  private async fetchRelevantLogs(
+  private async fetchRelevantLogsViaGetLogs(
     client: PublicClient,
     chain: ChainConfig,
     fromBlock: bigint,
     toBlock: bigint,
     addresses: Hex[],
-  ): Promise<Log[]> {
-    if (addresses.length === 0) return [];
-
-    // Public RPCs often reject huge topic filters — query per address
-    const all: Log[] = [];
-
-    for (const addr of addresses) {
-      try {
-        const batches = await withBackoff(`${chain.id}:logs:${addr}`, async () => {
-          const [transferFrom, transferTo, approval, approvalAll] =
-            await Promise.all([
-              client.getLogs({
-                fromBlock,
-                toBlock,
-                event: transferEvent,
-                args: { from: addr },
-              }),
-              client.getLogs({
-                fromBlock,
-                toBlock,
-                event: transferEvent,
-                args: { to: addr },
-              }),
-              client.getLogs({
-                fromBlock,
-                toBlock,
-                event: approvalEvent,
-                args: { owner: addr },
-              }),
-              client.getLogs({
-                fromBlock,
-                toBlock,
-                event: approvalForAllEvent,
-                args: { owner: addr },
-              }),
-            ]);
-          return [...transferFrom, ...transferTo, ...approval, ...approvalAll];
-        });
-        all.push(...batches);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[poller] ${chain.id} logs for ${addr}: ${message}`);
-      }
-      await sleep(120);
+  ): Promise<{ logs: Log[]; restricted: boolean; ok: boolean }> {
+    if (addresses.length === 0) {
+      return { logs: [], restricted: false, ok: true };
     }
 
-    return all;
+    const all: Log[] = [];
+    let restricted = false;
+    let okCount = 0;
+
+    for (const addr of addresses) {
+      if (restricted) break;
+      try {
+        const batches = await withBackoff(
+          `${chain.id}:logs:${addr}`,
+          async () => {
+            const [transferFrom, transferTo, approval, approvalAll] =
+              await Promise.all([
+                client.getLogs({
+                  fromBlock,
+                  toBlock,
+                  event: transferEvent,
+                  args: { from: addr },
+                }),
+                client.getLogs({
+                  fromBlock,
+                  toBlock,
+                  event: transferEvent,
+                  args: { to: addr },
+                }),
+                client.getLogs({
+                  fromBlock,
+                  toBlock,
+                  event: approvalEvent,
+                  args: { owner: addr },
+                }),
+                client.getLogs({
+                  fromBlock,
+                  toBlock,
+                  event: approvalForAllEvent,
+                  args: { owner: addr },
+                }),
+              ]);
+            return [
+              ...transferFrom,
+              ...transferTo,
+              ...approval,
+              ...approvalAll,
+            ];
+          },
+          2,
+        );
+        all.push(...batches);
+        okCount += 1;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (isRestrictedGetLogsError(message)) {
+          console.warn(
+            `[poller] ${chain.id}: eth_getLogs restricted on this RPC; relying on block receipts`,
+          );
+          restricted = true;
+          break;
+        }
+        console.warn(`[poller] ${chain.id} logs for ${addr}: ${message}`);
+      }
+      await sleep(40);
+    }
+
+    return {
+      logs: all,
+      restricted,
+      ok: !restricted && okCount === addresses.length,
+    };
   }
 
   private async summarizeLog(
@@ -356,26 +642,14 @@ export class ChainPoller {
     const topics = log.topics;
     const eventSig = topics[0];
 
-    const topicAddr = (topic: Hex | undefined): string | null => {
-      if (!topic || topic.length < 42) return null;
-      return `0x${topic.slice(-40)}`.toLowerCase();
-    };
-
     let wallet: string | null = null;
     let kind: ActivityKind = "unknown";
     let summary = "";
 
-    const transferSig =
-      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-    const approvalSig =
-      "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
-    const approvalForAllSig =
-      "0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31";
-
-    if (eventSig === transferSig) {
+    if (eventSig === TRANSFER_SIG) {
       const from = topicAddr(topics[1]);
       const to = topicAddr(topics[2]);
-      const isNft = topics.length >= 4; // indexed tokenId
+      const isNft = topics.length >= 4;
       if (from && addressSet.has(from)) wallet = from;
       else if (to && addressSet.has(to)) wallet = to;
       if (!wallet) return null;
@@ -423,14 +697,14 @@ export class ChainPoller {
           direction === "sent" ? (to ? short(to) : "?") : from ? short(from) : "?";
         summary = `${short(wallet)} ${direction} ${amount} ${symbol} ${direction === "sent" ? "→" : "←"} ${other}`;
       }
-    } else if (eventSig === approvalSig) {
+    } else if (eventSig === APPROVAL_SIG) {
       const owner = topicAddr(topics[1]);
       const spender = topicAddr(topics[2]);
       if (!owner || !addressSet.has(owner)) return null;
       wallet = owner;
       kind = "approval";
       summary = `${short(wallet)} approved ${spender ? short(spender) : "?"} on ${short(log.address)}`;
-    } else if (eventSig === approvalForAllSig) {
+    } else if (eventSig === APPROVAL_FOR_ALL_SIG) {
       const owner = topicAddr(topics[1]);
       const operator = topicAddr(topics[2]);
       if (!owner || !addressSet.has(owner)) return null;
@@ -442,7 +716,6 @@ export class ChainPoller {
       return null;
     }
 
-    // Prefer checksummed wallet from watchlist
     const watched = addressSet.get(wallet.toLowerCase());
     const canonical = watched?.address ?? wallet;
 
