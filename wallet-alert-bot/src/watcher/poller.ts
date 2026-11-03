@@ -219,7 +219,13 @@ export class ChainPoller {
 
     if (fromBlock >= latest) return;
 
-    const toBlock = Math.min(latest, fromBlock + this.config.blockBatchSize);
+    // Adaptive batch: catch up faster after outages without hammering tip forever
+    const lag = latest - fromBlock;
+    let batch = this.config.blockBatchSize;
+    if (lag > 500) batch = Math.min(40, this.config.blockBatchSize * 5);
+    else if (lag > 100) batch = Math.min(24, this.config.blockBatchSize * 3);
+    else if (lag > 30) batch = Math.min(16, this.config.blockBatchSize * 2);
+    const toBlock = Math.min(latest, fromBlock + batch);
     const addressSet = new Map(
       watched.map((w) => [w.address.toLowerCase(), w] as const),
     );
