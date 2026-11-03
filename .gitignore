@@ -2,3 +2,12 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+
+# wallet-alert-bot
+wallet-alert-bot/node_modules/
+wallet-alert-bot/dist/
+wallet-alert-bot/data/
+wallet-alert-bot/.env
+*.sqlite
+*.sqlite-*
+secrets.env
