@@ -177,14 +177,23 @@ export class ChainPoller {
       const watched = this.db.getWatchedAddresses();
       if (watched.length === 0) return;
 
-      for (const chain of this.config.chains) {
+      // Poll a few chains concurrently so fast L2 tips (Arb/Base) don't
+      // drift thousands of blocks behind during a full sequential pass.
+      const concurrency = 3;
+      const chains = this.config.chains;
+      for (let i = 0; i < chains.length; i += concurrency) {
         if (this.stopped) return;
-        try {
-          await this.pollChain(chain, watched);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.warn(`[poller] ${chain.id}: ${message}`);
-        }
+        const slice = chains.slice(i, i + concurrency);
+        await Promise.all(
+          slice.map(async (chain) => {
+            try {
+              await this.pollChain(chain, watched);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              console.warn(`[poller] ${chain.id}: ${message}`);
+            }
+          }),
+        );
         if (this.config.chainDelayMs > 0) {
           await sleep(this.config.chainDelayMs);
         }
@@ -222,7 +231,9 @@ export class ChainPoller {
     // If hopelessly behind after an outage, snap near tip — public RPCs cannot
     // backfill thousands of dense blocks via full receipt scans in time.
     let lag = latest - fromBlock;
-    if (lag > 800) {
+    // Only snap after real outages — fast L2s naturally lag a few hundred
+    // blocks during a multi-chain tick; snapping those would drop alerts.
+    if (lag > 2500) {
       const snapped = Math.max(0, latest - 24);
       console.warn(
         `[poller] ${chain.id}: cursor lag=${lag} too large for public RPC; snapping ${fromBlock} → ${snapped}`,
