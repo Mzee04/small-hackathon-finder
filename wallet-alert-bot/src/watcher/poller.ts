@@ -4,7 +4,6 @@ import {
   formatEther,
   formatUnits,
   http,
-  parseAbiItem,
   type Hex,
   type Log,
   type PublicClient,
@@ -14,16 +13,6 @@ import {
 import type { AppConfig, ChainConfig } from "../config/index.js";
 import type { BotDatabase, WatchedAddress } from "../db/database.js";
 import type { ActivityKind, DetectedActivity } from "./types.js";
-
-const transferEvent = parseAbiItem(
-  "event Transfer(address indexed from, address indexed to, uint256 value)",
-);
-const approvalEvent = parseAbiItem(
-  "event Approval(address indexed owner, address indexed spender, uint256 value)",
-);
-const approvalForAllEvent = parseAbiItem(
-  "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)",
-);
 
 const TRANSFER_SIG =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -86,12 +75,6 @@ function logTouchesWatched(
   return false;
 }
 
-function isRestrictedGetLogsError(message: string): boolean {
-  return /specify an address|archive|dedicated full node|Invalid parameters|403|method not available|not allowed|-32701|ranges over/i.test(
-    message,
-  );
-}
-
 async function mapPool<T, R>(
   items: T[],
   concurrency: number,
@@ -148,9 +131,6 @@ export class ChainPoller {
   private stopped = false;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
-  /** Chains whose eth_getLogs requires a contract address */
-  private restrictedLogs = new Set<string>();
-
   constructor(
     private readonly config: AppConfig,
     private readonly db: BotDatabase,
@@ -200,9 +180,9 @@ export class ChainPoller {
       const watched = this.db.getWatchedAddresses();
       if (watched.length === 0) return;
 
-      // Limited parallelism — full 9-way fan-out stampedes public RPCs.
+      // Keep chain concurrency low — public RPCs collapse under multi-chain load.
       const chainConcurrency = Math.min(
-        3,
+        2,
         Math.max(1, this.config.chains.length),
       );
       await mapPool(this.config.chains, chainConcurrency, async (chain) => {
@@ -265,7 +245,6 @@ export class ChainPoller {
     const addressSet = new Map(
       watched.map((w) => [w.address.toLowerCase(), w] as const),
     );
-    const addressList = [...addressSet.keys()] as Hex[];
 
     const activities: DetectedActivity[] = [];
     const logs: Log[] = [];
@@ -274,31 +253,10 @@ export class ChainPoller {
       { hash: Hex; wallet: string; blockNumber: number }
     >();
 
-    // 1) Topic getLogs for ERC-20 / NFT / approvals when the RPC allows it.
-    // Skip on large catch-up windows — receipts cover the same events without
-    // multiplying getLogs fan-out across every watched address.
-    let logsCovered = false;
-    const useGetLogs =
-      addressList.length > 0 &&
-      !this.restrictedLogs.has(chain.id) &&
-      window <= Math.max(this.config.blockBatchSize * 2, 24);
-    if (useGetLogs) {
-      const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
-        client,
-        chain,
-        BigInt(fromBlock + 1),
-        BigInt(toBlock),
-        addressList,
-      );
-      if (viaGetLogs.restricted) {
-        this.restrictedLogs.add(chain.id);
-      } else if (viaGetLogs.ok) {
-        logs.push(...viaGetLogs.logs);
-        logsCovered = true;
-      }
-    }
-
-    // 2) Parallel block receipts: native/contract from/to + log fallback.
+    // Receipts-first on public RPCs: topic eth_getLogs without a contract
+    // address is widely restricted and stamps endpoints when fanned out across
+    // wallets × chains. Block receipts still yield Transfer / Approval logs
+    // plus outer from/to for native + contract calls.
     const blockNums: number[] = [];
     for (let n = fromBlock + 1; n <= toBlock; n++) blockNums.push(n);
 
@@ -307,9 +265,14 @@ export class ChainPoller {
       this.config.receiptConcurrency,
       async (blockNum) => {
         if (this.stopped) {
-          return { blockNum, logs: [] as Log[], covered: false, involved: [] as { hash: Hex; wallet: string }[] };
+          return {
+            blockNum,
+            logs: [] as Log[],
+            covered: false,
+            involved: [] as { hash: Hex; wallet: string }[],
+          };
         }
-        return this.scanBlock(client, chain, blockNum, addressSet, logsCovered);
+        return this.scanBlock(client, chain, blockNum, addressSet);
       },
     );
 
@@ -398,7 +361,6 @@ export class ChainPoller {
     chain: ChainConfig,
     blockNum: number,
     addressSet: Map<string, WatchedAddress>,
-    logsCovered: boolean,
   ): Promise<{
     blockNum: number;
     logs: Log[];
@@ -431,22 +393,12 @@ export class ChainPoller {
             receipt.from,
             receipt.to ?? null,
           );
-          if (!logsCovered) {
-            outLogs.push(
-              ...this.filterReceiptLogs([receipt], addressSet),
-            );
-          }
+          outLogs.push(...this.filterReceiptLogs([receipt], addressSet));
         }
         return { blockNum, logs: outLogs, covered: true, involved };
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (!/does not exist|not available|not allowed|null/i.test(message)) {
-        // Fall through to getBlock path
-        if (!/429|rate|timeout|limit/i.test(message)) {
-          // quiet common fallback
-        }
-      }
+    } catch {
+      // Fall through to getBlock path
     }
 
     // Fallback: full block with transactions
@@ -460,10 +412,6 @@ export class ChainPoller {
     for (const tx of block.transactions) {
       if (typeof tx === "string") continue;
       pushInvolved(tx.hash, tx.from, tx.to ?? null);
-    }
-
-    if (logsCovered) {
-      return { blockNum, logs: [], covered: false, involved };
     }
 
     // Per-tx receipts only for involved hashes (partial ERC-20 receive coverage)
@@ -547,86 +495,6 @@ export class ChainPoller {
       kind,
       summary,
       explorerUrl: explorerUrl(chain, tx.hash),
-    };
-  }
-
-  private async fetchRelevantLogsViaGetLogs(
-    client: PublicClient,
-    chain: ChainConfig,
-    fromBlock: bigint,
-    toBlock: bigint,
-    addresses: Hex[],
-  ): Promise<{ logs: Log[]; restricted: boolean; ok: boolean }> {
-    if (addresses.length === 0) {
-      return { logs: [], restricted: false, ok: true };
-    }
-
-    const all: Log[] = [];
-    let restricted = false;
-    let okCount = 0;
-
-    for (const addr of addresses) {
-      if (restricted) break;
-      try {
-        const batches = await withBackoff(
-          `${chain.id}:logs:${addr}`,
-          async () => {
-            const [transferFrom, transferTo, approval, approvalAll] =
-              await Promise.all([
-                client.getLogs({
-                  fromBlock,
-                  toBlock,
-                  event: transferEvent,
-                  args: { from: addr },
-                }),
-                client.getLogs({
-                  fromBlock,
-                  toBlock,
-                  event: transferEvent,
-                  args: { to: addr },
-                }),
-                client.getLogs({
-                  fromBlock,
-                  toBlock,
-                  event: approvalEvent,
-                  args: { owner: addr },
-                }),
-                client.getLogs({
-                  fromBlock,
-                  toBlock,
-                  event: approvalForAllEvent,
-                  args: { owner: addr },
-                }),
-              ]);
-            return [
-              ...transferFrom,
-              ...transferTo,
-              ...approval,
-              ...approvalAll,
-            ];
-          },
-          2,
-        );
-        all.push(...batches);
-        okCount += 1;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (isRestrictedGetLogsError(message)) {
-          console.warn(
-            `[poller] ${chain.id}: eth_getLogs restricted on this RPC; relying on block receipts`,
-          );
-          restricted = true;
-          break;
-        }
-        console.warn(`[poller] ${chain.id} logs for ${addr}: ${message}`);
-      }
-      await sleep(40);
-    }
-
-    return {
-      logs: all,
-      restricted,
-      ok: !restricted && okCount === addresses.length,
     };
   }
 
