@@ -6,7 +6,7 @@ Designed for a single VPS: Node.js worker + SQLite + public RPCs (swap in Alchem
 
 ## Features
 
-- Multi-chain: Ethereum, Base, Arbitrum, Optimism, Polygon, BSC, Avalanche (configurable in `chains.json` / `ENABLED_CHAINS`)
+- Multi-chain: Ethereum, Base, Arbitrum, Optimism, Polygon, BSC, Avalanche, Robinhood Chain, Ink (configurable in `chains.json` / `ENABLED_CHAINS`)
 - Private allowlist — admin approves friends by Telegram id or `@username`
 - Each user manages only their own wallets (`/add`, `/remove`, `/list`) — unlimited addresses
 - Short Telegram alerts with chain name, summary, explorer link

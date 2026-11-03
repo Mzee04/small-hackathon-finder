@@ -61,5 +61,23 @@
     "defaultRpc": "https://avalanche-c-chain-rpc.publicnode.com",
     "explorerTx": "https://snowtrace.io/tx/{hash}",
     "nativeSymbol": "AVAX"
+  },
+  {
+    "id": "robinhood",
+    "name": "Robinhood Chain",
+    "chainId": 4663,
+    "rpcEnv": "RPC_ROBINHOOD",
+    "defaultRpc": "https://rpc.mainnet.chain.robinhood.com",
+    "explorerTx": "https://robinhoodchain.blockscout.com/tx/{hash}",
+    "nativeSymbol": "ETH"
+  },
+  {
+    "id": "ink",
+    "name": "Ink",
+    "chainId": 57073,
+    "rpcEnv": "RPC_INK",
+    "defaultRpc": "https://rpc-gel.inkonchain.com",
+    "explorerTx": "https://explorer.inkonchain.com/tx/{hash}",
+    "nativeSymbol": "ETH"
   }
 ]

@@ -31,7 +31,7 @@ const envSchema = z.object({
   CHAIN_DELAY_MS: z.coerce.number().int().nonnegative().default(800),
   REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
   ENABLED_CHAINS: z.string().default(
-    "ethereum,base,arbitrum,optimism,polygon,bsc,avalanche",
+    "ethereum,base,arbitrum,optimism,polygon,bsc,avalanche,robinhood,ink",
   ),
   DRY_RUN: z
     .string()
