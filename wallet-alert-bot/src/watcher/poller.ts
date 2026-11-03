@@ -200,24 +200,20 @@ export class ChainPoller {
       const watched = this.db.getWatchedAddresses();
       if (watched.length === 0) return;
 
-      // Parallel per-chain polling keeps L2 tips reachable on public RPCs.
-      const results = await Promise.allSettled(
-        this.config.chains.map(async (chain) => {
-          if (this.stopped) return;
-          await this.pollChain(chain, watched);
-        }),
+      // Limited parallelism — full 9-way fan-out stampedes public RPCs.
+      const chainConcurrency = Math.min(
+        3,
+        Math.max(1, this.config.chains.length),
       );
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i]!;
-        if (result.status === "rejected") {
-          const chain = this.config.chains[i]!;
-          const message =
-            result.reason instanceof Error
-              ? result.reason.message
-              : String(result.reason);
+      await mapPool(this.config.chains, chainConcurrency, async (chain) => {
+        if (this.stopped) return;
+        try {
+          await this.pollChain(chain, watched);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
           console.warn(`[poller] ${chain.id}: ${message}`);
         }
-      }
+      });
       this.db.pruneAlerted(14);
     } finally {
       this.running = false;
@@ -279,11 +275,14 @@ export class ChainPoller {
     >();
 
     // 1) Topic getLogs for ERC-20 / NFT / approvals when the RPC allows it.
+    // Skip on large catch-up windows — receipts cover the same events without
+    // multiplying getLogs fan-out across every watched address.
     let logsCovered = false;
-    if (
+    const useGetLogs =
       addressList.length > 0 &&
-      !this.restrictedLogs.has(chain.id)
-    ) {
+      !this.restrictedLogs.has(chain.id) &&
+      window <= Math.max(this.config.blockBatchSize * 2, 24);
+    if (useGetLogs) {
       const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
         client,
         chain,
