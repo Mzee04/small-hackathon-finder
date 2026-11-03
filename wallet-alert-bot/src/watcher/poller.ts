@@ -219,12 +219,9 @@ export class ChainPoller {
 
     if (fromBlock >= latest) return;
 
-    // If hopelessly behind after an outage, snap near tip — public RPCs cannot
-    // backfill thousands of dense blocks via full receipt scans in time.
     let lag = latest - fromBlock;
-    // Public RPCs cannot backfill dense history in time — prefer live tip
-    // watching. Fast L2s also drift during a 9-chain pass; snap rather than hang.
-    if (lag > 400) {
+    // True outages only — do not snap routine L2 drift (that drops alerts).
+    if (lag > 3000) {
       const snapped = Math.max(0, latest - 16);
       console.warn(
         `[poller] ${chain.id}: cursor lag=${lag} too large for public RPC; snapping ${fromBlock} → ${snapped}`,
@@ -235,19 +232,37 @@ export class ChainPoller {
       if (lag <= 0) return;
     }
 
-    const batch = this.config.blockBatchSize;
-    const toBlock = Math.min(latest, fromBlock + batch);
     const addressSet = new Map(
       watched.map((w) => [w.address.toLowerCase(), w] as const),
     );
     const addressList = [...addressSet.keys()] as Hex[];
+    const catchingUp = lag > 24;
 
     const activities: DetectedActivity[] = [];
     const logs: Log[] = [];
     let blocksOk = 0;
-    let receiptCoverageOk = true;
+    let toBlock = Math.min(latest, fromBlock + this.config.blockBatchSize);
+    let skipReceipts = false;
 
-    // Native + contract calls: scan transactions in the block range
+    // Catch-up: try one topic getLogs window on RPCs that allow it (drpc /
+    // chain-official). Wider native scan only when that succeeds — never
+    // advance the cursor past blocks whose token logs were not covered.
+    if (catchingUp && addressList.length > 0) {
+      const wideTo = Math.min(latest, fromBlock + Math.min(40, Math.max(lag, 8)));
+      const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
+        client,
+        chain,
+        BigInt(fromBlock + 1),
+        BigInt(wideTo),
+        addressList,
+      );
+      if (viaGetLogs.ok) {
+        logs.push(...viaGetLogs.logs);
+        toBlock = wideTo;
+        skipReceipts = true;
+      }
+    }
+
     for (let blockNum = fromBlock + 1; blockNum <= toBlock; blockNum++) {
       const block = await withBackoff(`${chain.id}:getBlock:${blockNum}`, () =>
         client.getBlock({
@@ -272,6 +287,8 @@ export class ChainPoller {
         }
       }
 
+      if (skipReceipts) continue;
+
       // eth_getBlockReceipts — works on PublicNode without contract address
       const { logs: blockLogs, covered } = await this.logsFromBlockReceipts(
         client,
@@ -281,19 +298,20 @@ export class ChainPoller {
         block.transactions,
       );
       logs.push(...blockLogs);
-      if (!covered) receiptCoverageOk = false;
-    }
 
-    // Topic getLogs only when receipts unavailable (e.g. Avalanche C-Chain RPC)
-    if (!receiptCoverageOk && addressList.length > 0) {
-      const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
-        client,
-        chain,
-        BigInt(fromBlock + 1),
-        BigInt(toBlock),
-        addressList,
-      );
-      logs.push(...viaGetLogs.logs);
+      // If receipts unsupported, finish remaining blocks with getLogs once
+      if (!covered) {
+        const viaGetLogs = await this.fetchRelevantLogsViaGetLogs(
+          client,
+          chain,
+          BigInt(blockNum),
+          BigInt(toBlock),
+          addressList,
+        );
+        logs.push(...viaGetLogs.logs);
+        // Still scan remaining blocks for native txs, but skip more receipts
+        skipReceipts = true;
+      }
     }
 
     for (const log of logs) {
@@ -514,6 +532,7 @@ export class ChainPoller {
               ...approvalAll,
             ];
           },
+          2,
         );
         all.push(...batches);
         okCount += 1;
