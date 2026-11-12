@@ -1,0 +1,105 @@
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { config as loadDotenv } from "dotenv";
+import { z } from "zod";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageRoot = resolve(__dirname, "../..");
+
+loadDotenv({ path: resolve(process.cwd(), ".env") });
+loadDotenv({ path: resolve(packageRoot, ".env") });
+
+const chainSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  chainId: z.number().int().positive(),
+  rpcEnv: z.string(),
+  defaultRpc: z.string().url(),
+  explorerTx: z.string(),
+  nativeSymbol: z.string(),
+});
+
+export type ChainConfig = z.infer<typeof chainSchema> & { rpcUrl: string };
+
+const envSchema = z.object({
+  TELEGRAM_BOT_TOKEN: z.string().min(10),
+  ADMIN_TELEGRAM_USER_ID: z.coerce.number().int().positive(),
+  DATABASE_PATH: z.string().default("./data/bot.sqlite"),
+  POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15_000),
+  BLOCK_BATCH_SIZE: z.coerce.number().int().positive().default(5),
+  CHAIN_DELAY_MS: z.coerce.number().int().nonnegative().default(800),
+  REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+  ENABLED_CHAINS: z.string().default(
+    "ethereum,base,arbitrum,optimism,polygon,bsc,avalanche",
+  ),
+  DRY_RUN: z
+    .string()
+    .optional()
+    .transform((v) => v === "1" || v?.toLowerCase() === "true"),
+});
+
+function loadChainsFile(): z.infer<typeof chainSchema>[] {
+  const candidates = [
+    resolve(process.cwd(), "chains.json"),
+    resolve(packageRoot, "chains.json"),
+  ];
+  const path = candidates.find((p) => existsSync(p));
+  if (!path) {
+    throw new Error("chains.json not found (expected next to package root)");
+  }
+  const raw = JSON.parse(readFileSync(path, "utf8"));
+  return z.array(chainSchema).parse(raw);
+}
+
+export type AppConfig = {
+  telegramBotToken: string;
+  adminTelegramUserId: number;
+  databasePath: string;
+  pollIntervalMs: number;
+  blockBatchSize: number;
+  chainDelayMs: number;
+  requestTimeoutMs: number;
+  dryRun: boolean;
+  chains: ChainConfig[];
+  packageRoot: string;
+};
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const parsed = envSchema.parse(env);
+  const enabled = new Set(
+    parsed.ENABLED_CHAINS.split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const chains = loadChainsFile()
+    .filter((c) => enabled.has(c.id.toLowerCase()))
+    .map((c) => {
+      const override = env[c.rpcEnv]?.trim();
+      return {
+        ...c,
+        rpcUrl: override && override.length > 0 ? override : c.defaultRpc,
+      };
+    });
+
+  if (chains.length === 0) {
+    throw new Error("No chains enabled — check ENABLED_CHAINS and chains.json");
+  }
+
+  return {
+    telegramBotToken: parsed.TELEGRAM_BOT_TOKEN,
+    adminTelegramUserId: parsed.ADMIN_TELEGRAM_USER_ID,
+    databasePath: resolve(parsed.DATABASE_PATH),
+    pollIntervalMs: parsed.POLL_INTERVAL_MS,
+    blockBatchSize: parsed.BLOCK_BATCH_SIZE,
+    chainDelayMs: parsed.CHAIN_DELAY_MS,
+    requestTimeoutMs: parsed.REQUEST_TIMEOUT_MS,
+    dryRun: Boolean(parsed.DRY_RUN),
+    chains,
+    packageRoot,
+  };
+}
+
+export function chainsConfigPath(): string {
+  return join(packageRoot, "chains.json");
+}
