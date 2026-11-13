@@ -30,8 +30,11 @@ from.
      cannot be read leaves that row visible with no eligibility badge.
      The report says how many hackathons it got versus `meta.total_count`.
    - **DEV:** the public challenges page (there is no challenges JSON API).
-     Only cards marked Live are opened. Prize boxes such as `$250 USD` are
-     added up.
+     Only cards marked Live are opened. Prize boxes are added into one
+     total. A bare amount (`$250 USD`) is kept as written. A per-winner
+     line (`Four winners: $300 USD each`, `Ten winners: $300 each`, or
+     `$300 each` with a count) is multiplied out first. Number words and
+     digits both count.
    - **Superteam Earn:** `https://earn.superteam.fun/api/listings?status=open`,
      then each listing's public detail. Only `region: Global` is kept.
      Submission counts are used as the crowd number.

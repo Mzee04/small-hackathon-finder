@@ -97,6 +97,14 @@ class TestBuildEntry:
         assert entry["cash_prizes"] == 2
         assert entry["themes"] == ["Machine Learning/AI"]
 
+    def test_drops_exact_engage_test_title(self):
+        assert hackathons.build_entry(make_item(title="Engage Test")) is None
+        assert hackathons.build_entry(make_item(title="  ENGAGE   TEST ")) is None
+        kept = hackathons.build_entry(make_item(title="Engage 6.0 – Code with AI Hackathon"))
+        assert kept is not None
+        assert kept["title"] == "Engage 6.0 – Code with AI Hackathon"
+        assert hackathons.build_entry(make_item(title="The Engage Test")) is not None
+
     def test_drops_invite_only(self):
         assert hackathons.build_entry(make_item(invite_only=True)) is None
 
@@ -256,6 +264,7 @@ class TestEndToEnd:
             assert e["url"] in html
         assert "Last updated" in html
         assert "honest limits" in html.lower()
+        assert 'rel="icon" href="favicon.ico"' in html
 
     def test_html_escapes_titles(self, tmp_path):
         nasty = make_item(title='Evil <script>alert(1)</script>')
@@ -808,6 +817,8 @@ class TestPageCopy:
         assert 'cron: "0 18 * * *"' in workflow
         assert "Show in-person events too" in readme
         assert "Show restricted / team-only" in readme
+        icon = root / "docs" / "favicon.ico"
+        assert icon.read_bytes()[:4] == b"\x00\x00\x01\x00"
 
 
 class TestOnlineClassification:
@@ -1214,9 +1225,68 @@ DEV_SWAG_PAGE = """
 DEV_STUDENT_PAGE = DEV_CASH_PAGE + "<p>This challenge is for students only.</p>"
 DEV_FEE_PAGE = DEV_CASH_PAGE + "<p>There is a $10 registration fee.</p>"
 
+# Live shape of https://dev.to/challenges/presage-2026-11-04 (November 2026):
+# three prize boxes, ten winners at $300, submissions due 22 Nov 2026.
+DEV_PER_WINNER_PAGE = """
+<meta property="og:title" content="Presage SmartSpectra SDK Challenge - DEV Challenge — DEV Community">
+<li><span class="tw-font-bold">Submissions due:</span>
+  <span class="tw-italic">November 22, 2026</span>
+</li>
+<div class="tw-font-semibold tw-text-lg">Four winners: $300 USD each</div>
+<div class="tw-font-semibold tw-text-lg">Three winners: $300 USD each</div>
+<div class="tw-font-semibold tw-text-lg">Three winners: $300 USD each</div>
+"""
+
+DEV_MIXED_PAGE = """
+<meta property="og:title" content="Mixed Pots - DEV Challenge">
+<span>Submissions due:</span> <span>December 1, 2026</span>
+<div class="tw-font-semibold tw-text-lg">$250 USD</div>
+<div class="tw-font-semibold tw-text-lg">Two winners: $100 each</div>
+"""
+
 
 def _superteam(summary, detail):
     return hackathons.parse_superteam_listing(summary, detail, now=utc(2026, 10, 24, 15))
+
+
+class TestDevPrizeParsing:
+    @pytest.mark.parametrize("raw, expected", [
+        ("$250 USD", ("$", 250.0)),
+        ("$200 USD", ("$", 200.0)),
+        ("$1,500", ("$", 1500.0)),
+        ("$<span data-currency-value>1,500</span>", ("$", 1500.0)),
+        ("£<span data-currency-value>10,000</span>", ("£", 10000.0)),
+        ("Four winners: $300 USD each", ("$", 1200.0)),
+        ("Three winners: $300 USD each", ("$", 900.0)),
+        ("Ten winners: $300 each", ("$", 3000.0)),
+        ("10 winners: $300 USD each", ("$", 3000.0)),
+        ("4 winners: $1,200 USD each", ("$", 4800.0)),
+        ("one winner: $500 USD", ("$", 500.0)),
+        ("twenty-one winners: $100 each", ("$", 2100.0)),
+        ("$300 USD each for ten winners", ("$", 3000.0)),
+        ("$300 each (10)", ("$", 3000.0)),
+        ("10 x $300 each", ("$", 3000.0)),
+        ("4 x $250.50 USD each", ("$", 1002.0)),
+    ])
+    def test_bare_amounts_and_per_winner_lines(self, raw, expected):
+        assert hackathons.parse_dev_prize(raw) == expected
+
+    def test_existing_parse_prize_still_reads_a_bare_amount(self):
+        assert hackathons.parse_prize("$<span data-currency-value>1,500</span>") == ("$", 1500.0)
+        assert hackathons.parse_prize("$250 USD") == ("$", 250.0)
+        # The old reader takes the first number and keeps the leading words.
+        # DEV listing code must not use that result for a per-winner line.
+        assert hackathons.parse_prize("Four winners: $300 USD each") == ("Four winners: $", 300.0)
+        assert hackathons.parse_prize("10 winners: $300 USD each") == ("", 10.0)
+
+    def test_each_without_a_count_is_not_a_total(self):
+        assert hackathons.parse_dev_prize("$300 each") is None
+        assert hackathons.parse_dev_prize("$300 USD each") is None
+        assert hackathons.parse_dev_prize("") is None
+        assert hackathons.parse_dev_prize(None) is None
+
+    def test_two_amounts_in_one_box_are_left_alone(self):
+        assert hackathons.parse_dev_prize("2 winners: $100 and $50 each") is None
 
 
 class TestDevChallenges:
@@ -1241,6 +1311,42 @@ class TestDevChallenges:
         assert entry["is_online"] is True
         assert entry["submission_deadline_utc"] == "2026-10-31T23:59:59Z"
         assert entry["url"] == "https://dev.to/challenges/week4"
+
+    def test_per_winner_boxes_sum_to_the_pool(self):
+        # Presage SmartSpectra: 4 + 3 + 3 winners at $300, due 22 Nov 2026.
+        entry = hackathons.parse_dev_challenge_page(
+            DEV_PER_WINNER_PAGE,
+            url="https://dev.to/challenges/presage-2026-11-04",
+            now=utc(2026, 11, 13, 12),
+        )
+        assert entry["title"] == "Presage SmartSpectra SDK Challenge"
+        assert entry["source"] == "DEV"
+        assert entry["prize_amount"] == 3000.0
+        assert entry["prize_display"] == "$3,000"
+        assert entry["prize_currency"] == "$"
+        assert entry["prize_usd_approx"] == 3000.0
+        assert entry["cash_prizes"] == 3
+        assert entry["submission_deadline_utc"] == "2026-11-22T23:59:59Z"
+        assert entry["submission_deadline_display"] == "Nov 22, 2026"
+        assert entry["url"] == "https://dev.to/challenges/presage-2026-11-04"
+        assert entry["is_online"] is True
+
+    def test_mixed_bare_and_per_winner_boxes_sum(self):
+        entry = hackathons.parse_dev_challenge_page(
+            DEV_MIXED_PAGE,
+            url="https://dev.to/challenges/mixed",
+            now=utc(2026, 11, 13, 12),
+        )
+        assert entry["prize_amount"] == 450.0
+        assert entry["cash_prizes"] == 2
+        assert entry["prize_display"] == "$450"
+
+    def test_each_without_a_count_does_not_invent_a_pool(self):
+        page = DEV_SWAG_PAGE.replace(
+            "<p>Badges for everyone.</p>",
+            '<div class="tw-font-semibold tw-text-lg">$300 each</div>',
+        )
+        assert hackathons.parse_dev_challenge_page(page, url="https://dev.to/challenges/each") is None
 
     def test_drops_pages_without_cash_students_fees_or_past_deadlines(self):
         assert hackathons.parse_dev_challenge_page(DEV_SWAG_PAGE, url="https://dev.to/challenges/swag") is None

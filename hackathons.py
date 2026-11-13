@@ -923,6 +923,16 @@ def attach_eligibility(
     return {"eligibility_known": known, "eligibility_unknown": unknown}
 
 
+def is_obvious_test_listing(title: str) -> bool:
+    """True when a title is exactly a known sandbox name, such as "Engage Test".
+
+    Matching ignores case and extra spaces. A real contest whose title only
+    contains those words (for example "Engage 6.0") is kept.
+    """
+    folded = re.sub(r"\s+", " ", title or "").strip().casefold()
+    return folded == "engage test"
+
+
 def listing_record(
     *,
     title: str,
@@ -944,12 +954,16 @@ def listing_record(
     location_icon: str = "",
     eligibility: Optional[Dict[str, Any]] = None,
     count_label: str = "registrant",
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
     """One row in the shared output shape used by every source.
 
     ``eligibility`` is omitted for Devpost, which fills it in later from
     each hackathon page. Other sources pass the flags they could read.
+    A title that is exactly "Engage Test" is a sandbox listing and is
+    dropped.
     """
+    if is_obvious_test_listing(title):
+        return None
     if registrants < 0:
         registrants = 0
     prize_usd = to_usd(amount, symbol)
@@ -1394,6 +1408,7 @@ def write_html_doc(entries: List[Dict[str, Any]], stats: Dict[str, Any], path: P
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
 <title>Small Hackathon Finder</title>
 <style>
   :root {{ color-scheme: light dark; }}
@@ -1820,26 +1835,146 @@ def parse_dev_challenge_index(html: str) -> List[Dict[str, str]]:
     return cards
 
 
+# DEV writes some pools as "Four winners: $300 USD each" or "Ten winners:
+# $300 each" instead of a single total. Digits and these number words both
+# count. "twenty-one" is accepted; "two hundred" is not.
+_COUNT_ONES = (
+    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+)
+_COUNT_TEENS = (
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+    "sixteen", "seventeen", "eighteen", "nineteen",
+)
+_COUNT_TENS = (
+    "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+)
+_NUMBER_WORDS: Dict[str, int] = {word: number for number, word in enumerate(_COUNT_ONES, start=1)}
+_NUMBER_WORDS.update({word: number for number, word in enumerate(_COUNT_TEENS, start=10)})
+_NUMBER_WORDS.update({word: (index + 2) * 10 for index, word in enumerate(_COUNT_TENS)})
+_NUMBER_WORDS["hundred"] = 100
+_COUNT_TOKEN_SRC = (
+    r"(?:\d{1,4}|hundred|"
+    + "|".join(_COUNT_TEENS)
+    + "|"
+    + "|".join(rf"{tens}(?:[-\s](?:{'|'.join(_COUNT_ONES)}))?" for tens in _COUNT_TENS)
+    + "|"
+    + "|".join(_COUNT_ONES)
+    + ")"
+)
+_WINNER_COUNT_RE = re.compile(
+    rf"\b({_COUNT_TOKEN_SRC})\s+winners?\b",
+    re.IGNORECASE,
+)
+_WINNER_COUNT_AFTER_RE = re.compile(
+    rf"\bwinners?\s*[:(\[]\s*({_COUNT_TOKEN_SRC})\b",
+    re.IGNORECASE,
+)
+_COUNT_TOKEN_RE = re.compile(rf"\b({_COUNT_TOKEN_SRC})\b", re.IGNORECASE)
+
+
+def _parse_count_token(token: str) -> Optional[int]:
+    """'10', 'ten', or 'twenty-one' -> a positive count, else None."""
+    cleaned = re.sub(r"\s+", " ", (token or "").strip().lower().replace("-", " "))
+    if not cleaned:
+        return None
+    if cleaned.isdigit():
+        value = int(cleaned)
+        return value if value > 0 else None
+    if cleaned in _NUMBER_WORDS:
+        return _NUMBER_WORDS[cleaned]
+    parts = cleaned.split(" ")
+    if len(parts) == 2:
+        tens = _NUMBER_WORDS.get(parts[0])
+        ones = _NUMBER_WORDS.get(parts[1])
+        if tens in {20, 30, 40, 50, 60, 70, 80, 90} and ones is not None and 1 <= ones <= 9:
+            return tens + ones
+    return None
+
+
+def _winner_count(text: str) -> Optional[int]:
+    """How many people a DEV prize box is paying, when the line says so."""
+    explicit = _WINNER_COUNT_RE.search(text)
+    if explicit:
+        return _parse_count_token(explicit.group(1))
+    after = _WINNER_COUNT_AFTER_RE.search(text)
+    if after:
+        return _parse_count_token(after.group(1))
+    # "$300 each" with the count elsewhere in the same box: "10 x $300 each",
+    # "$300 each (10)", "$300 each for ten".
+    stripped = _MONEY_RE.sub(" ", text)
+    found: List[int] = []
+    for match in _COUNT_TOKEN_RE.finditer(stripped):
+        value = _parse_count_token(match.group(1))
+        if value is not None:
+            found.append(value)
+    if len(found) == 1:
+        return found[0]
+    return None
+
+
+def _parse_per_winner_prize(text: str) -> Optional[Tuple[str, float]]:
+    """'Four winners: $300 USD each' -> ('$', 1200.0).
+
+    Needs one cash amount and a count. A unit price with no count is not
+    treated as the whole pool.
+    """
+    amounts = extract_prize_amounts(text)
+    if len(amounts) != 1:
+        return None
+    symbol, unit = amounts[0]
+    count = _winner_count(text)
+    if count is None or count <= 0 or unit <= 0:
+        return None
+    return symbol or "$", unit * count
+
+
+def parse_dev_prize(raw: Optional[str]) -> Optional[Tuple[str, float]]:
+    """One DEV prize box, as (symbol, total).
+
+    A bare amount ('$250 USD', or the same HTML Devpost uses) is kept as
+    written. A per-winner line ('N winners: $X USD each', 'Ten winners:
+    $300 each', '$300 each' with a count) is the count times the unit
+    amount. Number words and digits both count. Returns None when the box
+    is not a cash amount.
+    """
+    if not raw:
+        return None
+    text = _plain_text(str(raw))
+    if not text:
+        return None
+    if re.search(r"\b(?:each|winners?)\b", text, re.IGNORECASE):
+        return _parse_per_winner_prize(text)
+    parsed = parse_prize(text)
+    if parsed is None or parsed[1] <= 0:
+        return None
+    symbol = parsed[0] or "$"
+    if symbol.upper() in {"USD", "US$"}:
+        symbol = "$"
+    return symbol, parsed[1]
+
+
 def parse_dev_challenge_page(
     html: str,
     url: str,
     title: str = "",
     now: Optional[datetime] = None,
 ) -> Optional[Dict[str, Any]]:
-    """One DEV challenge page. Cash totals come from the prize boxes."""
+    """One DEV challenge page. Cash totals come from the prize boxes.
+
+    Each box may be a bare amount ('$250 USD') or a per-winner line
+    ('Four winners: $300 USD each'). Per-winner boxes are multiplied out,
+    then every box on the page is summed.
+    """
     now = _as_utc(now)
     plain = _plain_text(html or "")
     if text_is_student_only(plain) or text_has_entry_fee(plain):
         return None
     amounts: List[Tuple[str, float]] = []
     for raw in _DEV_PRIZE_DIV_RE.findall(html or ""):
-        parsed = parse_prize(html_module.unescape(raw))
+        parsed = parse_dev_prize(raw)
         if parsed is None or parsed[1] <= 0:
             continue
-        symbol = parsed[0] or "$"
-        if symbol.upper() in {"USD", "US$"}:
-            symbol = "$"
-        amounts.append((symbol, parsed[1]))
+        amounts.append(parsed)
     collapsed = collapse_prize_amounts(amounts)
     if collapsed is None:
         return None
