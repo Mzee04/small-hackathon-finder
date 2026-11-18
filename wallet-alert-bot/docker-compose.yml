@@ -1,0 +1,11 @@
+services:
+  wallet-alert-bot:
+    build: .
+    container_name: wallet-alert-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_PATH: /data/bot.sqlite
+    volumes:
+      - ./data:/data
