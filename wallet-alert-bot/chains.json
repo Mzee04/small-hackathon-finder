@@ -1,0 +1,126 @@
+[
+  {
+    "id": "ethereum",
+    "name": "Ethereum",
+    "chainId": 1,
+    "rpcEnv": "RPC_ETHEREUM",
+    "defaultRpc": "https://eth.drpc.org",
+    "rpcUrls": [
+      "https://eth.drpc.org",
+      "https://ethereum.publicnode.com",
+      "https://rpc.flashbots.net"
+    ],
+    "explorerTx": "https://etherscan.io/tx/{hash}",
+    "nativeSymbol": "ETH"
+  },
+  {
+    "id": "base",
+    "name": "Base",
+    "chainId": 8453,
+    "rpcEnv": "RPC_BASE",
+    "defaultRpc": "https://base.drpc.org",
+    "rpcUrls": [
+      "https://base.drpc.org",
+      "https://mainnet.base.org",
+      "https://base.publicnode.com"
+    ],
+    "explorerTx": "https://basescan.org/tx/{hash}",
+    "nativeSymbol": "ETH"
+  },
+  {
+    "id": "arbitrum",
+    "name": "Arbitrum",
+    "chainId": 42161,
+    "rpcEnv": "RPC_ARBITRUM",
+    "defaultRpc": "https://arb1.arbitrum.io/rpc",
+    "rpcUrls": [
+      "https://arb1.arbitrum.io/rpc",
+      "https://arbitrum.drpc.org",
+      "https://arbitrum-one.publicnode.com"
+    ],
+    "explorerTx": "https://arbiscan.io/tx/{hash}",
+    "nativeSymbol": "ETH"
+  },
+  {
+    "id": "optimism",
+    "name": "Optimism",
+    "chainId": 10,
+    "rpcEnv": "RPC_OPTIMISM",
+    "defaultRpc": "https://optimism.drpc.org",
+    "rpcUrls": [
+      "https://optimism.drpc.org",
+      "https://mainnet.optimism.io",
+      "https://optimism.publicnode.com"
+    ],
+    "explorerTx": "https://optimistic.etherscan.io/tx/{hash}",
+    "nativeSymbol": "ETH"
+  },
+  {
+    "id": "polygon",
+    "name": "Polygon",
+    "chainId": 137,
+    "rpcEnv": "RPC_POLYGON",
+    "defaultRpc": "https://polygon.drpc.org",
+    "rpcUrls": [
+      "https://polygon.drpc.org",
+      "https://rpc-mainnet.matic.quiknode.pro",
+      "https://polygon-bor.publicnode.com"
+    ],
+    "explorerTx": "https://polygonscan.com/tx/{hash}",
+    "nativeSymbol": "MATIC"
+  },
+  {
+    "id": "bsc",
+    "name": "BNB Smart Chain",
+    "chainId": 56,
+    "rpcEnv": "RPC_BSC",
+    "defaultRpc": "https://bsc.publicnode.com",
+    "rpcUrls": [
+      "https://bsc.publicnode.com",
+      "https://bsc.drpc.org",
+      "https://bsc-dataseed.binance.org",
+      "https://bsc-dataseed1.binance.org"
+    ],
+    "explorerTx": "https://bscscan.com/tx/{hash}",
+    "nativeSymbol": "BNB"
+  },
+  {
+    "id": "avalanche",
+    "name": "Avalanche C-Chain",
+    "chainId": 43114,
+    "rpcEnv": "RPC_AVALANCHE",
+    "defaultRpc": "https://api.avax.network/ext/bc/C/rpc",
+    "rpcUrls": [
+      "https://api.avax.network/ext/bc/C/rpc",
+      "https://avalanche-c-chain-rpc.publicnode.com",
+      "https://avalanche.drpc.org"
+    ],
+    "explorerTx": "https://snowtrace.io/tx/{hash}",
+    "nativeSymbol": "AVAX"
+  },
+  {
+    "id": "robinhood",
+    "name": "Robinhood Chain",
+    "chainId": 4663,
+    "rpcEnv": "RPC_ROBINHOOD",
+    "defaultRpc": "https://rpc.mainnet.chain.robinhood.com",
+    "rpcUrls": [
+      "https://rpc.mainnet.chain.robinhood.com"
+    ],
+    "explorerTx": "https://robinhoodchain.blockscout.com/tx/{hash}",
+    "nativeSymbol": "ETH"
+  },
+  {
+    "id": "ink",
+    "name": "Ink",
+    "chainId": 57073,
+    "rpcEnv": "RPC_INK",
+    "defaultRpc": "https://rpc-gel.inkonchain.com",
+    "rpcUrls": [
+      "https://rpc-gel.inkonchain.com",
+      "https://rpc-qnd.inkonchain.com"
+    ],
+    "explorerTx": "https://explorer.inkonchain.com/tx/{hash}",
+    "nativeSymbol": "ETH"
+  }
+]
