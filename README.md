@@ -25,7 +25,7 @@ from.
    delay between pages, retries with backoff). If one source errors or is
    blocked, the build still writes the others and prints a warning.
    - **Devpost:** every page of
-     `https://devpost.com/api/hackathons?status[]=open`, then each kept
+     [https://devpost.com/api/hackathons?status[]=open](https://devpost.com/api/hackathons?status%5B%5D=open), then each kept
      hackathon page for the **Who can participate** sidebar. A page that
      cannot be read leaves that row visible with no eligibility badge.
      The report says how many hackathons it got versus `meta.total_count`.
